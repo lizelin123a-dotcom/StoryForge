@@ -1,11 +1,17 @@
 import os
 from collections.abc import Iterable
+from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./storyforge.db")
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = PACKAGE_ROOT.parent
+DEFAULT_DATA_DIR = PROJECT_ROOT / "data"
+DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_DATABASE_PATH = DEFAULT_DATA_DIR / "storyforge.db"
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}")
 
 
 class Base(DeclarativeBase):

@@ -166,6 +166,9 @@ async function loadNovel(id: string) {
     writingForm.characters = novel.characters?.map(formatCharacter).join('\n') || ''
     writingForm.genre = novel.genre || ''
     writingForm.target_word_count = Number(novel.target_word_count || 120000)
+    if (novel.chapter_texts?.length) {
+      syncChaptersFromTexts(novel.chapter_texts)
+    }
     await refreshStatus(novel.id)
     if (window.location.hash !== `#/edit/${novel.id}`) window.location.hash = `/edit/${novel.id}`
   } catch (error) {
@@ -174,8 +177,7 @@ async function loadNovel(id: string) {
   }
 }
 
-function syncChaptersFromState(state: DaemonState) {
-  const texts = state.chapter_texts || []
+function syncChaptersFromTexts(texts: string[]) {
   chapters.value = texts.map((text, index) => ({
     title: `第 ${index + 1} 章`,
     content: text || '',
@@ -185,6 +187,10 @@ function syncChaptersFromState(state: DaemonState) {
   }))
   if (!chapters.value.length) activeChapter.value = 0
   if (activeChapter.value >= chapters.value.length) activeChapter.value = Math.max(0, chapters.value.length - 1)
+}
+
+function syncChaptersFromState(state: DaemonState) {
+  syncChaptersFromTexts(state.chapter_texts || [])
 }
 
 function syncPendingEdit() {

@@ -65,7 +65,9 @@ def get_novel(novel_id: str) -> dict[str, Any] | None:
         if novel is None:
             return None
         state_row = session.get(DaemonStateModel, novel_id)
-        return _detail_from_model(novel, dict(state_row.state) if state_row is not None else None)
+        state = dict(state_row.state) if state_row is not None else None
+        chapters = _chapters_for_novel(session, novel_id)
+        return _detail_from_model(novel, _merge_chapters_into_state(state, chapters))
 
 
 def update_target_word_count(novel_id: str, target_word_count: int | None) -> dict[str, Any] | None:
@@ -80,7 +82,9 @@ def update_target_word_count(novel_id: str, target_word_count: int | None) -> di
         session.commit()
         session.refresh(novel)
         state_row = session.get(DaemonStateModel, novel_id)
-        return _detail_from_model(novel, dict(state_row.state) if state_row is not None else None)
+        state = dict(state_row.state) if state_row is not None else None
+        chapters = _chapters_for_novel(session, novel_id)
+        return _detail_from_model(novel, _merge_chapters_into_state(state, chapters))
 
 
 def delete_novel(novel_id: str) -> bool:
@@ -129,6 +133,24 @@ def _daemon_states_by_novel_id(session: Any) -> dict[str, dict[str, Any]]:
     return {row.novel_id: dict(row.state) for row in rows}
 
 
+def _chapters_for_novel(session: Any, novel_id: str) -> list[ChapterModel]:
+    return session.query(ChapterModel).filter(ChapterModel.novel_id == novel_id).order_by(ChapterModel.index.asc()).all()
+
+
+def _merge_chapters_into_state(state: dict[str, Any] | None, chapters: list[ChapterModel]) -> dict[str, Any] | None:
+    if not chapters:
+        return state
+    merged = dict(state or {})
+    chapter_texts = [chapter.content or "" for chapter in chapters]
+    merged["chapter_texts"] = chapter_texts
+    merged.setdefault("baseline_texts", chapter_texts)
+    progress = dict(merged.get("progress") or {})
+    progress["written_chapters"] = len(chapters)
+    progress["total_words"] = sum(chapter.word_count or len(chapter.content or "") for chapter in chapters)
+    merged["progress"] = progress
+    return merged
+
+
 def _summary_from_model(novel: NovelModel, state: dict[str, Any] | None = None) -> dict[str, Any]:
     status = _state_status(novel, state)
     word_count = _state_word_count(novel, state)
@@ -148,7 +170,7 @@ def _summary_from_model(novel: NovelModel, state: dict[str, Any] | None = None) 
 def _detail_from_model(novel: NovelModel, state: dict[str, Any] | None = None) -> dict[str, Any]:
     status = _state_status(novel, state)
     word_count = _state_word_count(novel, state)
-    return {
+    detail = {
         "id": novel.id,
         "title": novel.title,
         "author": getattr(novel, "author", "StoryForge"),
@@ -164,6 +186,9 @@ def _detail_from_model(novel: NovelModel, state: dict[str, Any] | None = None) -
         "created_at": _format_time(getattr(novel, "created_at", None)),
         "updated_at": _format_time(_state_updated_at(novel, state)),
     }
+    if state and state.get("chapter_texts"):
+        detail["chapter_texts"] = state.get("chapter_texts")
+    return detail
 
 
 def _state_status(novel: NovelModel, state: dict[str, Any] | None) -> str:

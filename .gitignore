@@ -23,6 +23,7 @@ dist/
 *.db
 *.sqlite
 *.sqlite3
+!data/.gitkeep
 
 # Temporary / generated local files
 .tmp/

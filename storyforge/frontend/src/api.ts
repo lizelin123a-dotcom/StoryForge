@@ -46,6 +46,7 @@ export type NovelDetail = NovelSummary & {
   characters: CharacterSetting[]
   status_label?: string
   created_at?: string
+  chapter_texts?: string[]
 }
 
 export type GeneratedSettings = {

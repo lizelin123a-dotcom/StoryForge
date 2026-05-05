@@ -1,5 +1,13 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.3.3
+
+- 继续前端页面拆分，新增 [`DissectPage`](storyforge/frontend/src/components/DissectPage.vue)，封装对标拆解页上传、三遍拆解按钮、爽点/节奏/置换表展示。
+- `App.vue` 移除对标拆解页大段模板，改为通过 `file-selected`、`run-step` 与 `v-model:active-tab` 连接状态和行为。
+- 保持对标拆解现有交互不变，进一步降低主组件体积，为后续拆分创作台做准备。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml) 与页面 `APP_VERSION` 均提升至 `0.3.3`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.3.2
 
 - 继续前端组件化拆分，新增 [`BookcasePage`](storyforge/frontend/src/components/BookcasePage.vue) 与 [`ConfigPage`](storyforge/frontend/src/components/ConfigPage.vue)。

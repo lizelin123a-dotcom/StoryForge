@@ -47,7 +47,7 @@ def review_chapter(
     try:
         data = extract_json_object(llm(prompt, SYSTEM_PROMPT, True))
         return _normalize_review(data)
-    except Exception:
+    except Exception as exc:
         shuang = analyze_shuang_points(chapter_text, llm)
         rhythm = detect_rhythm(chapter_text, llm)
         gap = analyze_information_gap(chapter_text, llm)
@@ -60,6 +60,7 @@ def review_chapter(
             "shuang_analysis": {"types_used": list(shuang.get("frequency", {}).keys()), "main_type": shuang.get("main_shuang", ""), "frequency": shuang.get("frequency", {})},
             "rhythm": {"pattern": rhythm.get("overall", "不匹配"), "stage_word_counts": {item.get("stage", "未知"): item.get("word_count", 0) for item in rhythm.get("stages", [])}, "warnings": rhythm.get("warnings", [])},
             "information_gap": gap,
+            "_meta": {"source": "fallback", "stage": "chapter_review", "reason": str(exc)},
         })
 
 

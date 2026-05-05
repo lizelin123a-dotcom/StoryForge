@@ -8,7 +8,7 @@ type StepState = '待执行' | '执行中' | '已完成' | '失败'
 type Chapter = { title: string; content: string; nodeLabel: string; nodesDone: number; nodesTotal: number }
 type RightTab = '监控' | '审阅' | '生成逻辑' | '事件'
 
-const APP_VERSION = '0.2.0'
+const APP_VERSION = '0.3.0'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },

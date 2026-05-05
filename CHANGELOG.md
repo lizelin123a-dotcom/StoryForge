@@ -1,5 +1,17 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.3.0
+
+- 清洗并上传 GitHub 干净基线，移除旧 plotsys 历史中的 `.env`、数据库、缓存和构建产物风险。
+- 后端写作守护进程改为按 `novel_id` 管理多个 `DaemonOrchestrator`，避免多作品共用单例状态。
+- 为守护进程运行态增加基础锁，降低后台写作线程与 API 请求并发读写状态的风险。
+- 章节正文通过质量检查后写入 `ChapterModel`，删除作品时同步清理章节记录，作品详情会从章节表回填 `chapter_texts`。
+- SQLite 默认数据位置统一为项目根目录 `data/storyforge.db`，并在首次启动时自动从旧位置 `storyforge.db` / `storyforge/storyforge.db` 复制迁移。
+- LLM 规划、分幕、章纲、写作四问、节点正文与章末审阅增加本地兜底标记；前端会提示 `llm_fallback_used`，避免静默伪装成正常 LLM 输出。
+- 清理公开配置中的真实 API key，`.env.example` 与 `llm_config.json` 不再包含密钥。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml) 与页面 `APP_VERSION` 均提升至 `0.3.0`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.2.0
 
 - 将默认入口改为书架系统：空 hash 自动进入书架，作品卡片统一来自后端 `GET /api/v1/novel/list`。

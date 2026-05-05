@@ -23,10 +23,12 @@ def answer_four_questions(
 """
     try:
         return WritingFourQuestions(**extract_json_object(llm(prompt, SYSTEM_PROMPT, True)))
-    except Exception:
-        return WritingFourQuestions(
+    except Exception as exc:
+        fallback = WritingFourQuestions(
             emotion=node.emotion_purpose,
             character_state="处在当前节点触发事件带来的压力或行动状态中",
             reader_expectation=node.reader_expectation,
             shuang_type="规则内打脸" if node.node_type == "burst" else "铺垫后爆发",
         )
+        setattr(fallback, "_fallback_reason", str(exc))
+        return fallback

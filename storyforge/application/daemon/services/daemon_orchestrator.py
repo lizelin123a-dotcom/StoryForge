@@ -264,7 +264,11 @@ class DaemonOrchestrator:
                 manual_instructions=self.state.get("manual_review", {}).get("instructions", ""),
             )
             questions = answer_four_questions(node, context, llm=llm)
+            if getattr(questions, "_fallback_reason", ""):
+                self._notify("llm_fallback_used", {"stage": "four_questions", "reason": str(getattr(questions, "_fallback_reason"))})
             filled = generate_node_content(node, context, questions, llm=llm)
+            if filled.content and "【本地兜底生成】" in filled.content:
+                self._notify("llm_fallback_used", {"stage": "node_content", "reason": "node generation failed"})
             self._notify(
                 "node_generated",
                 {
@@ -295,6 +299,7 @@ class DaemonOrchestrator:
         )
         conflict_data = track_conflicts(chapter_text, chapter_index, self.state["conflicts"], llm=llm)
         voice_data = detect_voice_drift(chapter_text, self.state["baseline_texts"][-3:])
+        self._notify_fallback_if_needed(review_data)
         review_data["consistency"] = consistency
         review_data["outline_check"] = outline_check
         review_data["conflict_tracking"] = conflict_data

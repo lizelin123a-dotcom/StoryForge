@@ -8,10 +8,11 @@ import ConfigPage from './components/ConfigPage.vue'
 import DissectPage from './components/DissectPage.vue'
 import NoticeToast from './components/NoticeToast.vue'
 import NovelWizard from './components/NovelWizard.vue'
+import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, RightTab, RouteName, StepState } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.3.3'
+const APP_VERSION = '0.3.4'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -464,15 +465,23 @@ onMounted(async () => {
           <div class="flex-1 overflow-y-auto p-6"><textarea v-if="chapters.length" v-model="currentChapterText" class="min-h-full w-full resize-none rounded-2xl border border-[#2a2a2a] bg-[#151515] p-6 font-mono text-[15px] leading-8 text-zinc-200 shadow-2xl shadow-black/20" /><div v-else class="flex h-full items-center justify-center rounded-2xl border border-dashed border-[#3a3a3a] bg-[#151515] text-zinc-500">尚未开始写作，点击左侧“启动写作”后会自动加载持久化章节。</div></div>
           <div class="border-t border-[#2a2a2a] bg-[#141414] px-6 py-3 text-sm text-zinc-400">节点 {{ currentChapter?.nodesDone || 0 }}/{{ currentChapter?.nodesTotal || 0 }}：{{ currentChapter?.nodeLabel || '尚未开始' }}</div>
         </section>
-        <aside class="border-l border-[#2a2a2a] bg-[#141414] transition-all duration-150" :class="rightCollapsed ? 'w-12' : 'w-[360px]'">
-          <button v-if="rightCollapsed" class="h-full w-12 text-zinc-500 hover:bg-[#1a1a1a] hover:text-white" @click="rightCollapsed = false">‹</button>
-          <div v-else class="h-full overflow-y-auto p-4"><div class="mb-4 flex items-center justify-between"><h2 class="text-base font-semibold text-white">监控面板</h2><button class="rounded-lg border border-[#2a2a2a] px-2 text-zinc-500 hover:text-white" @click="rightCollapsed = true">›</button></div><div class="mb-3 grid grid-cols-4 gap-1 rounded-xl bg-[#0f0f0f] p-1 text-xs"><button v-for="tab in rightTabs" :key="tab" class="rounded-lg px-2 py-1.5" :class="activeRightTab === tab ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'" @click="activeRightTab = tab">{{ tab }}</button></div>
-            <div v-if="activeRightTab === '监控'" class="space-y-3"><div class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 shadow-lg shadow-black/20"><div class="mb-2 flex justify-between text-xs text-zinc-500"><span>进度</span><span>{{ wordPercent }}%</span></div><div class="h-2 rounded-full bg-zinc-800"><div class="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-blue-400" :style="{ width: wordPercent + '%' }"></div></div><div class="mt-3 grid grid-cols-2 gap-2 text-sm text-zinc-300"><span>{{ progress.total_words }}/{{ progress.target_words || writingForm.target_word_count }} 字</span><span>{{ progress.written_chapters }}/{{ progress.total_chapters }} 章 · {{ chapterPercent }}%</span></div></div><div class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4"><div class="mb-2 text-sm font-medium text-white">伏笔台账</div><p class="text-sm text-zinc-400">待回收 {{ daemonState.foreshadowing_ledger?.still_open?.length || 0 }} / 已回收 {{ daemonState.foreshadowing_ledger?.closed_hooks?.length || 0 }}</p></div><div class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4"><div class="mb-2 text-sm font-medium text-white">错误</div><p class="text-sm text-zinc-400">{{ daemonState.errors?.join('；') || '暂无错误' }}</p></div></div>
-            <div v-else-if="activeRightTab === '审阅'" class="space-y-3"><div v-if="pendingNode" class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4"><div class="mb-2 text-sm font-medium text-amber-200">半自动审阅：{{ pendingNodeTitle }}</div><textarea v-model="reviewEditContent" rows="10" class="mt-3 w-full rounded-xl border border-amber-500/30 bg-[#0f0f0f] p-3 text-sm leading-7 text-zinc-200" /><textarea v-model="reviewInstructions" rows="3" placeholder="给后续内容或重写使用的修改意见" class="mt-2 w-full rounded-xl border border-amber-500/30 bg-[#0f0f0f] p-3 text-sm text-zinc-200" /><div class="mt-3 grid grid-cols-3 gap-2 text-xs font-medium"><button class="rounded-xl bg-emerald-500 px-3 py-2 text-emerald-950" @click="submitReviewDecision('approve')">通过并同步</button><button class="rounded-xl bg-amber-500 px-3 py-2 text-amber-950" @click="submitReviewDecision('rewrite')">替换/重写</button><button class="rounded-xl bg-red-500 px-3 py-2 text-white" @click="submitReviewDecision('rollback')">回滚节点</button></div></div><div v-else class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 text-sm text-zinc-400">当前没有待审阅节点。</div></div>
-            <div v-else-if="activeRightTab === '生成逻辑'" class="space-y-3"><div v-for="(item, index) in generationLogic" :key="index" class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 text-sm leading-7 text-zinc-300">{{ item }}</div><p v-if="!generationLogic.length" class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 text-sm text-zinc-500">等待节点生成逻辑。</p></div>
-            <div v-else class="space-y-2"><div v-for="event in latestEvents" :key="event.receivedAt + event.type" class="rounded-lg bg-[#0f0f0f] p-2 text-xs text-zinc-500"><span class="text-zinc-300">{{ event.type }}</span> · {{ event.receivedAt }}</div><p v-if="!latestEvents.length" class="text-xs text-zinc-500">等待 SSE 事件。</p></div>
-          </div>
-        </aside>
+        <RightMonitorPanel
+          v-model:collapsed="rightCollapsed"
+          v-model:active-tab="activeRightTab"
+          v-model:review-edit-content="reviewEditContent"
+          v-model:review-instructions="reviewInstructions"
+          :tabs="rightTabs"
+          :word-percent="wordPercent"
+          :chapter-percent="chapterPercent"
+          :progress="progress"
+          :target-word-count="writingForm.target_word_count"
+          :daemon-state="daemonState"
+          :pending-node="pendingNode"
+          :pending-node-title="pendingNodeTitle"
+          :generation-logic="generationLogic"
+          :latest-events="latestEvents"
+          @review-decision="submitReviewDecision"
+        />
       </section>
 
       <ConfigPage v-else-if="route === 'config'" :novels="novels" :writing-form="writingForm" @load="loadNovel" @delete="deleteNovel" @test-connection="testConnection" @export-all="exportAllNovels" />

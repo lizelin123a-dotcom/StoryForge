@@ -1,5 +1,13 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.3.4
+
+- 拆分创作台右侧监控区，新增 [`RightMonitorPanel`](storyforge/frontend/src/components/RightMonitorPanel.vue)。
+- `RightMonitorPanel` 封装监控、半自动审阅、生成逻辑与 SSE 事件四个 tab，并通过 `v-model` 与事件向父组件同步折叠状态、当前 tab、审阅内容和审阅指令。
+- `App.vue` 移除右侧监控面板大段模板，创作台结构进一步收敛，为后续拆分左侧设定面板与章节编辑器做准备。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml) 与页面 `APP_VERSION` 均提升至 `0.3.4`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.3.3
 
 - 继续前端页面拆分，新增 [`DissectPage`](storyforge/frontend/src/components/DissectPage.vue)，封装对标拆解页上传、三遍拆解按钮、爽点/节奏/置换表展示。

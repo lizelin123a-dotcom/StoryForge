@@ -36,7 +36,7 @@ def generate_node_content(
     try:
         content = llm(prompt, SYSTEM_PROMPT, False).strip()
         if getattr(four_questions, "_fallback_reason", ""):
-            content += "\n\n（系统提示：写作四问使用了本地兜底模板。）"
+            content += "\n\n（系统提示：写作四问使用了本地写作教学规则。）"
         return node.model_copy(update={"content": content})
     except Exception as exc:
         content = _fallback_node_content(node, four_questions, exc)
@@ -45,9 +45,9 @@ def generate_node_content(
 
 def _fallback_node_content(node: ChapterNode, questions: WritingFourQuestions, error: Exception) -> str:
     return (
-        f"【本地兜底生成】{node.trigger_point}\n"
+        f"【本地写作教学规则生成】{node.trigger_point}\n"
         f"角色处在“{questions.character_state}”的状态中，场面围绕“{node.emotion_purpose}”推进。"
         f"读者此刻期待的是：{node.reader_expectation}。"
         f"这一节点需要承担“{node.node_type}”功能，先用动作和对话把压力落到具体场景，再把下一步行动钩出来。\n"
-        f"系统提示：LLM 节点正文生成失败，已使用本地兜底模板。原因：{error}"
+        f"系统提示：LLM 节点正文生成失败，已使用本地写作教学规则。原因：{error}"
     )

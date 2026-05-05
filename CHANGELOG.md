@@ -1,5 +1,16 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.0
+
+- 明确本地规则来源：`C:\\Users\\25109\\Desktop\\备份` 下的资料是写作教学知识库，不再在用户可见文案中称为“普通模板”。
+- 新增写作知识库读取服务 [`writing_knowledge.py`](storyforge/infrastructure/knowledge/writing_knowledge.py)，可读取 `备份/基础` 与 `备份/资料` 下的 `.docx` 教学内容，并按开篇、期待感、爽点、结构、角色、冲突、行文等关键词选择片段。
+- `context_governance` 在构建节点上下文时注入 `writing_guidance`，让写作四问和节点正文生成能参考核心教学资料。
+- LLM 失败时的用户提示改为“切换本地写作教学规则”，节点正文降级输出标记为“本地写作教学规则生成”，避免误解为随意模板。
+- 拆分中间章节编辑区，新增 [`ChapterEditor`](storyforge/frontend/src/components/ChapterEditor.vue)，封装章节 tab、正文编辑器、空状态和节点状态条。
+- `App.vue` 移除章节编辑区模板，创作台三大区域已拆成 `LeftSettingsPanel`、`ChapterEditor`、`RightMonitorPanel`。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml) 与页面 `APP_VERSION` 均提升至 `0.4.0`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.3.5
 
 - 拆分创作台左侧设定区，新增 [`LeftSettingsPanel`](storyforge/frontend/src/components/LeftSettingsPanel.vue)。

@@ -4,6 +4,7 @@ import { api, getApiBase, setApiBase, type CharacterSetting, type DaemonState, t
 import AboutPage from './components/AboutPage.vue'
 import AppSidebar from './components/AppSidebar.vue'
 import BookcasePage from './components/BookcasePage.vue'
+import ChapterEditor from './components/ChapterEditor.vue'
 import ConfigPage from './components/ConfigPage.vue'
 import DissectPage from './components/DissectPage.vue'
 import LeftSettingsPanel from './components/LeftSettingsPanel.vue'
@@ -13,7 +14,7 @@ import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, RightTab, RouteName, StepState } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.3.5'
+const APP_VERSION = '0.4.0'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -235,7 +236,7 @@ function applyEvent(event: SseEvent) {
   }
   if (event.data?.generation_logic) generationLogic.value.unshift(String(event.data.generation_logic))
   if (event.type === 'llm_fallback_used') {
-    appNotice.value = `LLM 调用失败，已使用本地兜底模板：${String(event.data?.stage || 'unknown')}`
+    appNotice.value = `LLM 调用失败，已切换本地写作教学规则：${String(event.data?.stage || 'unknown')}`
   }
   if (event.type === 'node_review_required') {
     reviewEditContent.value = String(event.data?.content || pendingNode.value?.content || '')
@@ -452,11 +453,11 @@ onMounted(async () => {
           @resume-writing="resumeWriting"
           @export-text="exportText"
         />
-        <section class="flex min-w-[400px] flex-1 flex-col bg-[#0f0f0f]">
-          <div class="border-b border-[#2a2a2a] bg-[#141414]/80 px-5 py-3"><div v-if="chapters.length" class="flex gap-2 overflow-x-auto pb-1"><button v-for="(chapter, index) in chapters" :key="chapter.title" class="shrink-0 rounded-full border px-4 py-1.5 text-sm" :class="activeChapter === index ? 'border-indigo-500/50 bg-indigo-500/20 text-white' : 'border-[#2a2a2a] bg-[#1a1a1a] text-zinc-400 hover:text-white'" @click="activeChapter = index">{{ chapter.title }}</button></div><p v-else class="text-sm text-zinc-500">尚未开始写作</p></div>
-          <div class="flex-1 overflow-y-auto p-6"><textarea v-if="chapters.length" v-model="currentChapterText" class="min-h-full w-full resize-none rounded-2xl border border-[#2a2a2a] bg-[#151515] p-6 font-mono text-[15px] leading-8 text-zinc-200 shadow-2xl shadow-black/20" /><div v-else class="flex h-full items-center justify-center rounded-2xl border border-dashed border-[#3a3a3a] bg-[#151515] text-zinc-500">尚未开始写作，点击左侧“启动写作”后会自动加载持久化章节。</div></div>
-          <div class="border-t border-[#2a2a2a] bg-[#141414] px-6 py-3 text-sm text-zinc-400">节点 {{ currentChapter?.nodesDone || 0 }}/{{ currentChapter?.nodesTotal || 0 }}：{{ currentChapter?.nodeLabel || '尚未开始' }}</div>
-        </section>
+        <ChapterEditor
+          v-model:active-chapter="activeChapter"
+          v-model:current-chapter-text="currentChapterText"
+          :chapters="chapters"
+        />
         <RightMonitorPanel
           v-model:collapsed="rightCollapsed"
           v-model:active-tab="activeRightTab"

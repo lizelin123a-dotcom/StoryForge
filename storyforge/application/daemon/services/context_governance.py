@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from storyforge.infrastructure.knowledge import select_writing_guidance
+
 
 @dataclass(frozen=True)
 class ContextEntry:
@@ -45,8 +47,10 @@ def build_governed_context(
     recent_summaries = [text for text in chapter_summaries[-max_summaries:] if text]
     recent_baselines = [text for text in baseline_texts[-max_baselines:] if text]
     active_hooks = _select_active_hooks(foreshadowing_ledger, chapter_index)
+    writing_guidance = select_writing_guidance("结构", "期待感", "爽点", "角色", "冲突", limit=4)
     entries = [
         ContextEntry("story_bible", "故事圣经", story_bible, 100),
+        ContextEntry("writing_guidance", "写作教学规则", writing_guidance, 95),
         ContextEntry("chapter_summaries", "近章摘要", recent_summaries, 80),
         ContextEntry("baseline_texts", "近章文风样本", recent_baselines, 60),
         ContextEntry("foreshadowing", "可用伏笔", active_hooks, 70),
@@ -55,6 +59,7 @@ def build_governed_context(
         "只使用 selected_context 中与当前节点相关的信息，避免把长期设定一次性灌入正文。",
         "优先延续近三章的叙事视角、节奏和角色状态。",
         "伏笔只推进或回收 hook_agenda 中的条目，不随意新增无关大坑。",
+        "优先遵循 writing_guidance 中的写作教学规则：期待感、爽点、结构、冲突和角色行动必须落到具体剧情。"
     ]
     if manual_instructions.strip():
         constraints.append(f"人工审阅指令优先：{manual_instructions.strip()}")
@@ -74,6 +79,7 @@ def build_governed_context(
         "selected_context": [entry.__dict__ for entry in entries],
         "hook_agenda": active_hooks,
         "constraints": constraints,
+        "writing_guidance": writing_guidance,
     }
 
 

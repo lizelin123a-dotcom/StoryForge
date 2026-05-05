@@ -267,8 +267,8 @@ class DaemonOrchestrator:
             if getattr(questions, "_fallback_reason", ""):
                 self._notify("llm_fallback_used", {"stage": "four_questions", "reason": str(getattr(questions, "_fallback_reason"))})
             filled = generate_node_content(node, context, questions, llm=llm)
-            if filled.content and "【本地兜底生成】" in filled.content:
-                self._notify("llm_fallback_used", {"stage": "node_content", "reason": "node generation failed"})
+            if filled.content and "【本地写作教学规则生成】" in filled.content:
+                self._notify("llm_fallback_used", {"stage": "node_content", "reason": "node generation failed; local writing rules used"})
             self._notify(
                 "node_generated",
                 {

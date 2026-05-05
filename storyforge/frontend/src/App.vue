@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api, getApiBase, setApiBase, type CharacterSetting, type DaemonState, type GeneratedSettings, type NovelDetail, type NovelSummary, type SseEvent } from './api'
+import AboutPage from './components/AboutPage.vue'
+import AppSidebar from './components/AppSidebar.vue'
+import NoticeToast from './components/NoticeToast.vue'
+import NovelWizard from './components/NovelWizard.vue'
+import type { Chapter, RightTab, RouteName, StepState } from './types'
 import { useSSE } from './useSSE'
 
-type RouteName = 'bookcase' | 'edit' | 'dissect' | 'config' | 'about'
-type StepState = '待执行' | '执行中' | '已完成' | '失败'
-type Chapter = { title: string; content: string; nodeLabel: string; nodesDone: number; nodesTotal: number }
-type RightTab = '监控' | '审阅' | '生成逻辑' | '事件'
-
-const APP_VERSION = '0.3.0'
+const APP_VERSION = '0.3.1'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -425,18 +425,10 @@ onMounted(async () => {
 
 <template>
   <div class="min-h-screen min-w-[1024px] bg-[#0f0f0f] text-[#e0e0e0]">
-    <aside class="fixed inset-y-0 left-0 z-20 flex w-[60px] flex-col items-center border-r border-[#2a2a2a] bg-[#111111]/95 py-4 shadow-2xl shadow-black/30 backdrop-blur">
-      <div class="mb-6 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/15 text-lg text-indigo-300 ring-1 ring-indigo-500/25">S</div>
-      <nav class="flex flex-1 flex-col gap-3">
-        <button v-for="item in navItems" :key="item.key" :title="item.label" class="flex h-10 w-10 items-center justify-center rounded-xl border text-xl hover:-translate-y-0.5" :class="route === item.key ? 'border-indigo-500/40 bg-indigo-500/20 text-white shadow-lg shadow-indigo-950/30' : 'border-transparent bg-transparent text-zinc-500 hover:border-[#2a2a2a] hover:bg-[#1a1a1a] hover:text-zinc-200'" @click="go(item.key)">{{ item.icon }}</button>
-      </nav>
-      <div class="h-2 w-2 rounded-full" :class="sseStatus === 'connected' ? 'bg-emerald-400' : sseStatus === 'error' ? 'bg-red-400' : 'bg-amber-400'"></div>
-    </aside>
+    <AppSidebar :route="route" :sse-status="sseStatus" :nav-items="navItems" @go="go" />
 
     <main class="ml-[60px] min-h-screen">
-      <div v-if="appNotice" class="fixed right-5 top-5 z-30 max-w-xl rounded-xl border border-[#2a2a2a] bg-[#1a1a1a]/95 px-4 py-3 text-sm text-zinc-200 shadow-2xl shadow-black/40">
-        {{ appNotice }} <button class="ml-3 text-zinc-500 hover:text-white" @click="appNotice = ''">关闭</button>
-      </div>
+      <NoticeToast :notice="appNotice" @close="appNotice = ''" />
 
       <section v-if="route === 'bookcase'" class="min-h-screen p-8">
         <header class="mb-8 flex items-end justify-between gap-4">
@@ -497,16 +489,19 @@ onMounted(async () => {
 
       <section v-else-if="route === 'dissect'" class="min-h-screen p-8"><header class="mb-6"><h1 class="text-2xl font-semibold text-white">对标拆解</h1><p class="text-zinc-500">上传 .txt 对标书，执行三遍拆解并生成素材库。</p></header><div class="rounded-2xl border border-dashed border-[#3a3a3a] bg-[#1a1a1a] p-10 text-center" @dragover.prevent @drop.prevent="onFileSelected($event.dataTransfer?.files[0])"><div class="text-4xl">📄</div><p class="mt-3 text-zinc-300">拖拽上传或点击上传 .txt 文件</p><input type="file" accept=".txt" class="mt-4 text-sm text-zinc-500" @change="onFileSelected(($event.target as HTMLInputElement).files?.[0])" /></div><div class="mt-6 grid grid-cols-[360px_1fr] gap-6"><div class="rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-5"><h2 class="text-lg font-medium text-white">{{ uploadedFileName || dissectBook.title }}</h2><p class="mt-2 text-sm text-zinc-500">作者：{{ dissectBook.author }} · 类型：{{ dissectBook.genre }} · {{ dissectBook.wordCount }} 字</p><div class="mt-5 space-y-3"><button class="w-full rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white" @click="runStep('first')">第一遍阅读模式 · {{ steps.first }}</button><button class="w-full rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white" @click="runStep('second')">第二遍拆解模式 · {{ steps.second }}</button><button class="w-full rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white" @click="runStep('third')">第三遍单元结构 · {{ steps.third }}</button></div></div><div class="rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-5"><div class="mb-4 flex gap-2"><button v-for="tab in ['爽点分析','节奏分析','置换表']" :key="tab" class="rounded-full border px-4 py-1.5 text-sm" :class="activeDissectTab === tab ? 'border-indigo-500/50 bg-indigo-500/20 text-white' : 'border-[#2a2a2a] text-zinc-400'" @click="activeDissectTab = tab as typeof activeDissectTab">{{ tab }}</button></div><div v-if="activeDissectTab === '爽点分析'" class="space-y-4"><div v-for="item in shuangStats" :key="item.type" class="rounded-xl bg-[#0f0f0f] p-4 text-sm text-zinc-300">{{ item.type }} · {{ item.count }}</div></div><div v-else-if="activeDissectTab === '节奏分析'" class="rounded-xl bg-[#0f0f0f] p-4 text-sm text-zinc-300">等待拆解结果。</div><div v-else class="grid grid-cols-2 gap-3"><div v-for="row in replacementRows" :key="row.group" class="rounded-xl bg-[#0f0f0f] p-4"><div class="text-sm text-indigo-300">{{ row.group }}</div><p class="mt-2 text-sm text-zinc-400">{{ row.old }} → {{ row.next }}</p></div></div></div></div></section>
 
-      <section v-else class="flex min-h-screen items-center justify-center p-8"><div class="max-w-2xl rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-8 text-center shadow-2xl shadow-black/30"><div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 text-2xl text-indigo-300">S</div><h1 class="text-3xl font-semibold text-white">StoryForge</h1><p class="mt-3 text-zinc-400">版本 {{ APP_VERSION }} · 书架、创作台、对标拆解与自动写作一体化系统。</p><p class="mt-4 text-sm text-zinc-500">作者：StoryForge Team</p></div></section>
+      <AboutPage v-else :version="APP_VERSION" />
     </main>
 
-    <div v-if="wizardOpen" class="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-6">
-      <div class="w-full max-w-3xl rounded-3xl border border-[#2a2a2a] bg-[#151515] p-6 shadow-2xl shadow-black/50">
-        <div class="mb-5 flex items-center justify-between"><div><h2 class="text-2xl font-semibold text-white">新建作品</h2><p class="text-sm text-zinc-500">输入不超过 100 字的一句话灵感，由后端 LLM 生成设定。</p></div><button class="text-zinc-500 hover:text-white" @click="wizardOpen = false">✕</button></div>
-        <label class="block text-sm text-zinc-400">一句话灵感（{{ wizardLogline.length }}/100）<textarea v-model="wizardLogline" maxlength="100" rows="3" class="mt-2 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-zinc-200" placeholder="例如：退役调查员在星际禁航区收到十年前自己的求救信号" /></label>
-        <div class="mt-4 flex gap-3"><button class="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white" :disabled="wizardLoading || !wizardLogline.trim()" @click="generateNovelSettings">{{ wizardLoading ? '生成中...' : wizardSettings ? '重新生成设定' : '生成设定' }}</button><button v-if="wizardSettings" class="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-emerald-950" @click="createNovelFromWizard">接受并进入创作台</button></div>
-        <div v-if="wizardSettings" class="mt-5 grid gap-4 rounded-2xl border border-[#2a2a2a] bg-[#0f0f0f] p-5"><label class="text-xs text-zinc-500">标题<input v-model="wizardSettings.title" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#151515] p-3 text-sm text-zinc-200" /></label><label class="text-xs text-zinc-500">世界观<textarea v-model="wizardSettings.world_setting" rows="4" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#151515] p-3 text-sm text-zinc-200" /></label><label class="text-xs text-zinc-500">类型<input v-model="wizardSettings.genre" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#151515] p-3 text-sm text-zinc-200" /></label><label class="text-xs text-zinc-500">目标字数<input v-model.number="wizardSettings.target_word_count" type="number" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#151515] p-3 text-sm text-zinc-200" /></label><div><div class="mb-2 text-xs text-zinc-500">角色</div><div class="space-y-2"><div v-for="(character, index) in wizardSettings.characters" :key="index" class="grid grid-cols-3 gap-2"><input v-model="character.name" class="rounded-xl border border-[#2a2a2a] bg-[#151515] p-3 text-sm text-zinc-200" placeholder="姓名" /><input v-model="character.role" class="rounded-xl border border-[#2a2a2a] bg-[#151515] p-3 text-sm text-zinc-200" placeholder="定位" /><input v-model="character.description" class="rounded-xl border border-[#2a2a2a] bg-[#151515] p-3 text-sm text-zinc-200" placeholder="描述" /></div></div></div></div>
-      </div>
-    </div>
+    <NovelWizard
+      :open="wizardOpen"
+      :loading="wizardLoading"
+      :logline="wizardLogline"
+      :settings="wizardSettings"
+      @close="wizardOpen = false"
+      @update:logline="wizardLogline = $event"
+      @update:settings="wizardSettings = $event"
+      @generate="generateNovelSettings"
+      @accept="createNovelFromWizard"
+    />
   </div>
 </template>

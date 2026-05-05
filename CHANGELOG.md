@@ -1,5 +1,13 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.3.1
+
+- 前端开始组件化拆分，新增 [`AppSidebar`](storyforge/frontend/src/components/AppSidebar.vue)、[`NoticeToast`](storyforge/frontend/src/components/NoticeToast.vue)、[`NovelWizard`](storyforge/frontend/src/components/NovelWizard.vue)、[`AboutPage`](storyforge/frontend/src/components/AboutPage.vue)。
+- 新增共享类型文件 [`types.ts`](storyforge/frontend/src/types.ts)，将路由、章节、步骤、右侧面板 tab 类型从 `App.vue` 中抽出。
+- `App.vue` 改为引用侧栏、通知、新建作品向导和关于页组件，降低主文件模板复杂度，为后续拆分书架、创作台和监控面板做准备。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml) 与页面 `APP_VERSION` 均提升至 `0.3.1`。
+- 验证通过：`npm run build`。
+
 ## 2026-05-05 · v0.3.0
 
 - 清洗并上传 GitHub 干净基线，移除旧 plotsys 历史中的 `.env`、数据库、缓存和构建产物风险。

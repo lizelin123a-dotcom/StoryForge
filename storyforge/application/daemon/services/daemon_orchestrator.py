@@ -1,6 +1,6 @@
 import time
 from copy import deepcopy
-from threading import Thread
+from threading import Lock, Thread
 from typing import Any, Callable, Literal
 from uuid import uuid4
 
@@ -19,6 +19,7 @@ from storyforge.domain.dissect.dissected_chapter import DissectedChapter
 from storyforge.domain.node.node import ChapterNode
 from storyforge.infrastructure.ai.openai_adapter import call_llm
 from storyforge.infrastructure.persistence.daemon_state_repository import save_daemon_state
+from storyforge.infrastructure.persistence.novel_repository import save_chapter_text
 
 Listener = Callable[[dict[str, Any]], None]
 
@@ -49,6 +50,7 @@ class DaemonOrchestrator:
         self.dissected_chapters = dissected_chapters or []
         self.listeners: list[Listener] = []
         self.thread: Thread | None = None
+        self.state_lock = Lock()
         self.state = self._build_initial_state(
             novel_id=novel_id or str(uuid4()),
             target_word_count=target_word_count,
@@ -132,10 +134,12 @@ class DaemonOrchestrator:
             self._notify("resumed", {"status": "running"})
 
     def get_state(self) -> dict[str, Any]:
-        return deepcopy(self.state)
+        with self.state_lock:
+            return deepcopy(self.state)
 
     def get_progress(self) -> dict[str, Any]:
-        return deepcopy(self.state["progress"])
+        with self.state_lock:
+            return deepcopy(self.state["progress"])
 
     def add_listener(self, listener: Listener) -> None:
         self.listeners.append(listener)
@@ -295,14 +299,14 @@ class DaemonOrchestrator:
         review_data["quality_score"] = quality_score
 
         if quality_score >= self.state["quality_threshold"]:
-            self._commit_chapter(chapter_text, review_data, conflict_data)
+            self._commit_chapter(chapter_index, chapter_text, review_data, conflict_data)
             apply_review_delta(self.state, chapter_index, review_data, chapter_text)
 
         self._notify("chapter_reviewed", {"chapter_index": chapter_index, "review_data": review_data})
         self._notify("writing_progress", self.get_progress())
         return {"chapter_index": chapter_index, "review_data": review_data, "quality_score": quality_score}
 
-    def _commit_chapter(self, chapter_text: str, review_data: dict[str, Any], conflict_data: dict[str, Any]) -> None:
+    def _commit_chapter(self, chapter_index: int, chapter_text: str, review_data: dict[str, Any], conflict_data: dict[str, Any]) -> None:
         self.state["chapter_texts"].append(chapter_text)
         self.state["baseline_texts"].append(chapter_text)
         self.state["chapter_summaries"].append(str(review_data.get("chapter_summary", "")))
@@ -315,6 +319,7 @@ class DaemonOrchestrator:
         }
         self.state["progress"]["written_chapters"] += 1
         self.state["progress"]["total_words"] += len(chapter_text)
+        save_chapter_text(self.state["novel_id"], chapter_index, chapter_text)
 
     def _calculate_quality_score(self, review_data: dict[str, Any]) -> int:
         score = 50
@@ -407,13 +412,16 @@ class DaemonOrchestrator:
         try:
             save_daemon_state(self.get_state())
         except Exception as exc:
-            self.state["errors"].append(f"state persistence error: {exc}")
+            with self.state_lock:
+                self.state["errors"].append(f"state persistence error: {exc}")
 
     def _notify(self, event_type: str, data: dict[str, Any]) -> None:
-        event = {"type": event_type, "data": data, "state": self.get_state()}
+        state_snapshot = self.get_state()
+        event = {"type": event_type, "data": data, "state": state_snapshot}
         self._persist_state()
         for listener in list(self.listeners):
             try:
                 listener(event)
             except Exception as exc:
-                self.state["errors"].append(f"listener error: {exc}")
+                with self.state_lock:
+                    self.state["errors"].append(f"listener error: {exc}")

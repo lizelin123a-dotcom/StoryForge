@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from storyforge.infrastructure.persistence.database import SessionLocal, init_db
 from storyforge.infrastructure.persistence.models.daemon import DaemonStateModel
-from storyforge.infrastructure.persistence.models.novel import NovelModel
+from storyforge.infrastructure.persistence.models.novel import ChapterModel, NovelModel
 
 
 STATUS_LABELS = {
@@ -90,9 +90,38 @@ def delete_novel(novel_id: str) -> bool:
         if novel is None:
             return False
         session.query(DaemonStateModel).filter(DaemonStateModel.novel_id == novel_id).delete()
+        session.query(ChapterModel).filter(ChapterModel.novel_id == novel_id).delete()
         session.delete(novel)
         session.commit()
         return True
+
+
+def save_chapter_text(novel_id: str, chapter_index: int, content: str, title: str | None = None) -> None:
+    init_db()
+    chapter_id = f"{novel_id}:chapter:{chapter_index}"
+    now = datetime.utcnow()
+    with SessionLocal() as session:
+        chapter = session.get(ChapterModel, chapter_id)
+        if chapter is None:
+            chapter = ChapterModel(
+                id=chapter_id,
+                novel_id=novel_id,
+                volume_id=None,
+                index=chapter_index,
+                title=title or f"第 {chapter_index} 章",
+                content=content,
+                word_count=len(content),
+            )
+            session.add(chapter)
+        else:
+            chapter.title = title or chapter.title
+            chapter.content = content
+            chapter.word_count = len(content)
+        novel = session.get(NovelModel, novel_id)
+        if novel is not None:
+            novel.word_count = sum(row.word_count or 0 for row in session.query(ChapterModel).filter(ChapterModel.novel_id == novel_id).all())
+            novel.updated_at = now
+        session.commit()
 
 
 def _daemon_states_by_novel_id(session: Any) -> dict[str, dict[str, Any]]:

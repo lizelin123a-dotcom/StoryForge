@@ -1,5 +1,6 @@
 import asyncio
 import json
+from threading import Lock
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -7,13 +8,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from storyforge.application.daemon.services.daemon_orchestrator import DaemonOrchestrator
-from storyforge.infrastructure.persistence.daemon_state_repository import load_daemon_state, save_daemon_state
 from storyforge.application.daemon.services.sse_event_service import SSEEventManager
 from storyforge.infrastructure.ai.openai_adapter import call_llm
-from storyforge.infrastructure.persistence.daemon_state_repository import load_latest_daemon_state
+from storyforge.infrastructure.persistence.daemon_state_repository import load_daemon_state, load_latest_daemon_state, save_daemon_state
 
 router = APIRouter(tags=["daemon"])
-orchestrator: DaemonOrchestrator | None = None
+orchestrators: dict[str, DaemonOrchestrator] = {}
+orchestrators_lock = Lock()
 sse_manager = SSEEventManager()
 
 
@@ -39,6 +40,7 @@ class TestLLMRequest(BaseModel):
 
 
 class ReviewDecisionRequest(BaseModel):
+    novel_id: str | None = None
     content: str | None = None
     instructions: str = ""
 
@@ -63,11 +65,8 @@ def daemon_events() -> StreamingResponse:
 
 @router.post("/api/v1/daemon/start")
 def start_daemon(request: DaemonStartRequest) -> dict[str, str]:
-    global orchestrator
-    if orchestrator is not None and orchestrator.get_state().get("status") == "running":
-        raise HTTPException(status_code=409, detail="daemon is already running")
     saved_state = load_daemon_state(request.novel_id) if request.novel_id else None
-    orchestrator = DaemonOrchestrator(
+    candidate = DaemonOrchestrator(
         title=request.title,
         world_setting=request.world_setting,
         characters=request.characters,
@@ -81,9 +80,15 @@ def start_daemon(request: DaemonStartRequest) -> dict[str, str]:
         semi_auto=request.semi_auto,
         initial_state=saved_state,
     )
-    orchestrator.add_listener(sse_manager.broadcast)
-    orchestrator.start()
-    return {"status": "started", "novel_id": orchestrator.get_state()["novel_id"]}
+    novel_id = str(candidate.get_state()["novel_id"])
+    with orchestrators_lock:
+        existing = orchestrators.get(novel_id)
+        if existing is not None and existing.get_state().get("status") == "running":
+            raise HTTPException(status_code=409, detail="daemon is already running for this novel")
+        orchestrators[novel_id] = candidate
+    candidate.add_listener(sse_manager.broadcast)
+    candidate.start()
+    return {"status": "started", "novel_id": novel_id}
 
 
 @router.post("/api/v1/daemon/pause")
@@ -103,7 +108,7 @@ def resume_daemon(novel_id: str | None = None) -> dict[str, str]:
 
 @router.post("/api/v1/daemon/review/approve")
 def approve_review(request: ReviewDecisionRequest) -> dict[str, Any]:
-    current = _get_orchestrator()
+    current = _get_orchestrator(request.novel_id)
     try:
         node = current.approve_pending_node(request.content, request.instructions)
     except ValueError as exc:
@@ -113,7 +118,7 @@ def approve_review(request: ReviewDecisionRequest) -> dict[str, Any]:
 
 @router.post("/api/v1/daemon/review/rewrite")
 def rewrite_review(request: ReviewDecisionRequest) -> dict[str, Any]:
-    current = _get_orchestrator()
+    current = _get_orchestrator(request.novel_id)
     try:
         node = current.rewrite_pending_node(request.content, request.instructions)
     except ValueError as exc:
@@ -123,7 +128,7 @@ def rewrite_review(request: ReviewDecisionRequest) -> dict[str, Any]:
 
 @router.post("/api/v1/daemon/review/rollback")
 def rollback_review(request: ReviewDecisionRequest) -> dict[str, Any]:
-    current = _get_orchestrator()
+    current = _get_orchestrator(request.novel_id)
     try:
         node = current.rollback_pending_node(request.instructions)
     except ValueError as exc:
@@ -149,19 +154,20 @@ def test_llm(request: TestLLMRequest) -> dict[str, str]:
 @router.get("/api/v1/daemon/status")
 def daemon_status(novel_id: str | None = None) -> dict[str, Any]:
     if novel_id:
-        current_state = orchestrator.get_state() if orchestrator is not None else None
-        if current_state and current_state.get("novel_id") == novel_id:
-            return current_state
+        current = _get_running_orchestrator(novel_id)
+        if current is not None:
+            return current.get_state()
         saved_state = load_daemon_state(novel_id)
         if saved_state is not None:
             return saved_state
         return _idle_state(novel_id)
-    if orchestrator is None:
-        latest_state = load_latest_daemon_state()
-        if latest_state is not None:
-            return latest_state
-        return _idle_state()
-    return orchestrator.get_state()
+    latest = _latest_running_orchestrator()
+    if latest is not None:
+        return latest.get_state()
+    latest_state = load_latest_daemon_state()
+    if latest_state is not None:
+        return latest_state
+    return _idle_state()
 
 
 def _idle_state(novel_id: str = "") -> dict[str, Any]:
@@ -188,10 +194,9 @@ def _idle_state(novel_id: str = "") -> dict[str, Any]:
 
 
 def _get_orchestrator(novel_id: str | None = None, allow_saved_pause: bool = False) -> DaemonOrchestrator | dict[str, Any]:
-    if orchestrator is not None:
-        current_state = orchestrator.get_state()
-        if not novel_id or current_state.get("novel_id") == novel_id:
-            return orchestrator
+    current = _get_running_orchestrator(novel_id) if novel_id else _latest_running_orchestrator()
+    if current is not None:
+        return current
     if allow_saved_pause:
         saved_state = load_daemon_state(novel_id) if novel_id else load_latest_daemon_state()
         if saved_state is not None:
@@ -201,3 +206,15 @@ def _get_orchestrator(novel_id: str | None = None, allow_saved_pause: bool = Fal
             sse_manager.broadcast({"type": "paused", "data": {"reason": "saved_state_pause"}, "state": saved_state})
             return saved_state
     raise HTTPException(status_code=404, detail="daemon is not started")
+
+
+def _get_running_orchestrator(novel_id: str) -> DaemonOrchestrator | None:
+    with orchestrators_lock:
+        return orchestrators.get(novel_id)
+
+
+def _latest_running_orchestrator() -> DaemonOrchestrator | None:
+    with orchestrators_lock:
+        if not orchestrators:
+            return None
+        return next(reversed(orchestrators.values()))

@@ -32,61 +32,76 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <aside class="border-l border-[#2a2a2a] bg-[#141414] transition-all duration-150" :class="collapsed ? 'w-12' : 'w-[360px]'">
-    <button v-if="collapsed" class="h-full w-12 text-zinc-500 hover:bg-[#1a1a1a] hover:text-white" @click="emit('update:collapsed', false)">‹</button>
-    <div v-else class="h-full overflow-y-auto p-4">
-      <div class="mb-4 flex items-center justify-between">
-        <h2 class="text-base font-semibold text-white">监控面板</h2>
-        <button class="rounded-lg border border-[#2a2a2a] px-2 text-zinc-500 hover:text-white" @click="emit('update:collapsed', true)">›</button>
-      </div>
-      <div class="mb-3 flex gap-1 overflow-x-auto rounded-xl bg-[#0f0f0f] p-1 text-xs">
-        <button v-for="tab in tabs" :key="tab" class="shrink-0 rounded-lg px-3 py-1.5" :class="activeTab === tab ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'" @click="emit('update:activeTab', tab)">{{ tab }}</button>
-      </div>
+  <aside class="writer-side writer-side--right" :class="collapsed ? 'writer-side--collapsed' : ''">
+    <button v-if="collapsed" class="side-collapse-button" @click="emit('update:collapsed', false)">检</button>
+    <div v-else class="writer-side__inner">
+      <header class="side-header">
+        <div>
+          <p class="section-kicker">Inspector</p>
+          <h2>检测与监控</h2>
+          <p>只保留写作时需要看的信号。</p>
+        </div>
+        <button class="sf-icon-btn" aria-label="收起右侧面板" @click="emit('update:collapsed', true)">›</button>
+      </header>
 
-      <div v-if="activeTab === '检测'" class="space-y-3">
-        <div class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4">
-          <div class="mb-2 flex items-center justify-between">
-            <div>
-              <div class="text-sm font-medium text-white">当前文本教学检测</div>
-              <p class="mt-1 text-xs text-zinc-500">检测情绪、钩子、矛盾、爽点、信息差、代入感和角色行动。</p>
+      <nav class="inspector-tabs" aria-label="监控标签">
+        <button v-for="tab in tabs" :key="tab" :class="activeTab === tab ? 'inspector-tabs__item--active' : ''" @click="emit('update:activeTab', tab)">{{ tab }}</button>
+      </nav>
+
+      <div class="inspector-scroll">
+        <section v-if="activeTab === '检测'" class="inspector-stack">
+          <article class="metric-card">
+            <div class="metric-card__header">
+              <div>
+                <h3>当前文本教学检测</h3>
+                <p>情绪、钩子、矛盾、爽点、信息差、代入感和角色行动。</p>
+              </div>
+              <button class="sf-btn sf-btn--primary" :disabled="analysisLoading" @click="emit('analyzeCurrentText')">{{ analysisLoading ? '检测中' : '检测' }}</button>
             </div>
-            <button class="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-medium text-white" :disabled="analysisLoading" @click="emit('analyzeCurrentText')">{{ analysisLoading ? '检测中' : '检测' }}</button>
-          </div>
-          <p class="text-sm leading-7 text-zinc-300">{{ writingAnalysis?.summary || '点击检测，或编辑正文后查看当前段落信号。' }}</p>
-        </div>
-        <div v-if="writingAnalysis" class="space-y-3">
-          <div v-for="signal in writingAnalysis.signals" :key="signal.name" class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-3">
-            <div class="mb-2 flex justify-between text-sm"><span class="font-medium text-zinc-200">{{ signal.name }}</span><span class="text-zinc-500">{{ signal.status }} · {{ signal.score }}</span></div>
-            <div class="h-1.5 rounded-full bg-zinc-800"><div class="h-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-blue-400" :style="{ width: Math.min(100, signal.score) + '%' }"></div></div>
-            <p class="mt-2 text-xs text-zinc-500">命中：{{ signal.hits?.join('、') || '暂无明显关键词' }}</p>
-          </div>
-          <div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-            <div class="mb-2 text-sm font-medium text-amber-200">修改建议</div>
-            <ul class="space-y-2 text-sm leading-7 text-amber-100/90"><li v-for="item in writingAnalysis.suggestions" :key="item">• {{ item }}</li></ul>
-          </div>
-          <div class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4">
-            <div class="mb-2 text-sm font-medium text-white">关联教学资料</div>
-            <div v-for="item in writingAnalysis.guidance" :key="item.path" class="mb-3 text-xs leading-6 text-zinc-400"><span class="text-zinc-200">{{ item.title }}</span>：{{ item.content.slice(0, 180) }}...</div>
-          </div>
-        </div>
-      </div>
+            <p class="metric-card__body">{{ writingAnalysis?.summary || '点击检测，或编辑正文后查看当前段落信号。' }}</p>
+          </article>
+          <template v-if="writingAnalysis">
+            <article v-for="signal in writingAnalysis.signals" :key="signal.name" class="signal-card">
+              <div class="signal-card__top"><strong>{{ signal.name }}</strong><span>{{ signal.status }} · {{ signal.score }}</span></div>
+              <div class="signal-meter"><span :style="{ width: Math.min(100, signal.score) + '%' }"></span></div>
+              <p>命中：{{ signal.hits?.join('、') || '暂无明显关键词' }}</p>
+            </article>
+            <article class="note-card note-card--warning">
+              <h3>修改建议</h3>
+              <ul><li v-for="item in writingAnalysis.suggestions" :key="item">{{ item }}</li></ul>
+            </article>
+            <article class="note-card">
+              <h3>关联教学资料</h3>
+              <p v-for="item in writingAnalysis.guidance" :key="item.path"><strong>{{ item.title }}</strong>：{{ item.content.slice(0, 180) }}...</p>
+            </article>
+          </template>
+        </section>
 
-      <div v-else-if="activeTab === '监控'" class="space-y-3">
-        <div class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 shadow-lg shadow-black/20"><div class="mb-2 flex justify-between text-xs text-zinc-500"><span>进度</span><span>{{ wordPercent }}%</span></div><div class="h-2 rounded-full bg-zinc-800"><div class="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-blue-400" :style="{ width: wordPercent + '%' }"></div></div><div class="mt-3 grid grid-cols-2 gap-2 text-sm text-zinc-300"><span>{{ progress.total_words }}/{{ progress.target_words || targetWordCount }} 字</span><span>{{ progress.written_chapters }}/{{ progress.total_chapters }} 章 · {{ chapterPercent }}%</span></div></div>
-        <div class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4"><div class="mb-2 text-sm font-medium text-white">伏笔台账</div><p class="text-sm text-zinc-400">待回收 {{ daemonState.foreshadowing_ledger?.still_open?.length || 0 }} / 已回收 {{ daemonState.foreshadowing_ledger?.closed_hooks?.length || 0 }}</p></div>
-        <div class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4"><div class="mb-2 text-sm font-medium text-white">错误</div><p class="text-sm text-zinc-400">{{ daemonState.errors?.join('；') || '暂无错误' }}</p></div>
-      </div>
+        <section v-else-if="activeTab === '监控'" class="inspector-stack">
+          <article class="metric-card">
+            <div class="metric-line"><span>总字数</span><strong>{{ wordPercent }}%</strong></div>
+            <div class="signal-meter"><span :style="{ width: wordPercent + '%' }"></span></div>
+            <div class="metric-grid"><p><strong>{{ progress.total_words }}</strong><span>/ {{ progress.target_words || targetWordCount }} 字</span></p><p><strong>{{ progress.written_chapters }}</strong><span>/ {{ progress.total_chapters }} 章 · {{ chapterPercent }}%</span></p></div>
+          </article>
+          <article class="note-card"><h3>伏笔台账</h3><p>待回收 {{ daemonState.foreshadowing_ledger?.still_open?.length || 0 }} / 已回收 {{ daemonState.foreshadowing_ledger?.closed_hooks?.length || 0 }}</p></article>
+          <article class="note-card"><h3>错误</h3><p>{{ daemonState.errors?.join('；') || '暂无错误' }}</p></article>
+        </section>
 
-      <div v-else-if="activeTab === '审阅'" class="space-y-3">
-        <div v-if="pendingNode" class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm leading-7 text-amber-100">
-          <div class="mb-2 font-medium">正在审阅：{{ pendingNodeTitle }}</div>
-          <p class="text-xs text-zinc-400">审阅内容已合并到中间右侧的“节点草稿 / 审阅”。这里仅保留状态提醒，避免重复编辑框。</p>
-        </div>
-        <div v-else class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 text-sm text-zinc-400">当前没有待审阅节点。</div>
-      </div>
+        <section v-else-if="activeTab === '审阅'" class="inspector-stack">
+          <article v-if="pendingNode" class="note-card note-card--warning"><h3>正在审阅：{{ pendingNodeTitle }}</h3><p>审阅内容已合并到中间右侧的“节点草稿”。这里仅保留状态提醒，避免重复编辑框。</p></article>
+          <article v-else class="note-card"><p>当前没有待审阅节点。</p></article>
+        </section>
 
-      <div v-else-if="activeTab === '生成逻辑'" class="space-y-3"><div v-for="(item, index) in generationLogic" :key="index" class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 text-sm leading-7 text-zinc-300">{{ item }}</div><p v-if="!generationLogic.length" class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 text-sm text-zinc-500">等待节点生成逻辑。</p></div>
-      <div v-else class="space-y-2"><div v-for="event in latestEvents" :key="event.receivedAt + event.type" class="rounded-lg bg-[#0f0f0f] p-2 text-xs text-zinc-500"><span class="text-zinc-300">{{ event.type }}</span> · {{ event.receivedAt }}</div><p v-if="!latestEvents.length" class="text-xs text-zinc-500">等待 SSE 事件。</p></div>
+        <section v-else-if="activeTab === '生成逻辑'" class="inspector-stack">
+          <article v-for="(item, index) in generationLogic" :key="index" class="note-card"><p>{{ item }}</p></article>
+          <article v-if="!generationLogic.length" class="note-card"><p>等待节点生成逻辑。</p></article>
+        </section>
+
+        <section v-else class="inspector-stack">
+          <article v-for="event in latestEvents" :key="event.receivedAt + event.type" class="event-card"><strong>{{ event.type }}</strong><span>{{ event.receivedAt }}</span></article>
+          <article v-if="!latestEvents.length" class="note-card"><p>等待 SSE 事件。</p></article>
+        </section>
+      </div>
     </div>
   </aside>
 </template>

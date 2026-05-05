@@ -4,18 +4,16 @@ import { api, getApiBase, setApiBase, type CharacterSetting, type DaemonState, t
 import AboutPage from './components/AboutPage.vue'
 import AppSidebar from './components/AppSidebar.vue'
 import BookcasePage from './components/BookcasePage.vue'
-import ChapterEditor from './components/ChapterEditor.vue'
 import CocreationWizard from './components/CocreationWizard.vue'
 import ConfigPage from './components/ConfigPage.vue'
 import DissectPage from './components/DissectPage.vue'
-import LeftSettingsPanel from './components/LeftSettingsPanel.vue'
 import NoticeToast from './components/NoticeToast.vue'
 import NovelWizard from './components/NovelWizard.vue'
-import RightMonitorPanel from './components/RightMonitorPanel.vue'
+import WriterStudio from './components/WriterStudio.vue'
 import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, EditorSkill, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '1.1.0'
+const APP_VERSION = '2.0.0'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -716,66 +714,58 @@ onMounted(async () => {
 
       <BookcasePage v-if="route === 'bookcase'" :novels="novels" @create="openCocreation" @load="loadNovel" />
 
-      <section v-else-if="route === 'edit'" class="flex h-screen min-w-0 overflow-hidden">
-        <LeftSettingsPanel
-          v-model:collapsed="leftCollapsed"
-          v-model:setting-open="settingOpen"
-          v-model:full-auto-mode="fullAutoMode"
-          v-model:dissect-source-id="dissectSourceId"
-          v-model:editor-chat-input="editorChatInput"
-          :selected-novel="selectedNovel"
-          :state-tone="stateTone"
-          :state-label="stateLabel"
-          :writing-form="writingForm"
-          :editor-chat-messages="editorChatMessages"
-          :editor-chat-loading="editorChatLoading"
-          :editor-chat-last-turn="editorChatLastTurn"
-          :editor-skills="editorSkills"
-          :selected-skill-ids="selectedEditorSkillIds"
-          @send-editor-chat="sendEditorChat"
-          @apply-editor-patch="applyEditorPatch"
-          @toggle-editor-skill="toggleEditorSkill"
-          @start-writing="startWriting"
-          @pause-writing="pauseWriting"
-          @resume-writing="resumeWriting"
-          @export-text="exportText"
-        />
-        <ChapterEditor
-          v-model:active-chapter="activeChapter"
-          v-model:current-chapter-text="currentChapterText"
-          v-model:selected-node-id="selectedNodeId"
-          v-model:current-node-text="currentNodeText"
-          :chapters="chapters"
-          :node-drafts="currentChapterNodeDrafts"
-          :save-loading="saveLoading"
-          :pending-node="pendingNode"
-          :pending-node-title="pendingNodeTitle"
-          @save-chapter="saveCurrentChapter"
-          @save-node="saveCurrentNode"
-          @toggle-node-lock="toggleNodeLock"
-          @review-decision="submitReviewDecision"
-        />
-        <RightMonitorPanel
-          v-model:collapsed="rightCollapsed"
-          v-model:active-tab="activeRightTab"
-          v-model:review-edit-content="reviewEditContent"
-          v-model:review-instructions="reviewInstructions"
-          :tabs="rightTabs"
-          :word-percent="wordPercent"
-          :chapter-percent="chapterPercent"
-          :progress="progress"
-          :target-word-count="writingForm.target_word_count"
-          :daemon-state="daemonState"
-          :pending-node="pendingNode"
-          :pending-node-title="pendingNodeTitle"
-          :generation-logic="generationLogic"
-          :latest-events="latestEvents"
-          :writing-analysis="writingAnalysis"
-          :analysis-loading="analysisLoading"
-          @review-decision="submitReviewDecision"
-          @analyze-current-text="analyzeCurrentText"
-        />
-      </section>
+      <WriterStudio
+        v-else-if="route === 'edit'"
+        v-model:left-collapsed="leftCollapsed"
+        v-model:right-collapsed="rightCollapsed"
+        v-model:setting-open="settingOpen"
+        v-model:full-auto-mode="fullAutoMode"
+        v-model:dissect-source-id="dissectSourceId"
+        v-model:editor-chat-input="editorChatInput"
+        v-model:active-chapter="activeChapter"
+        v-model:current-chapter-text="currentChapterText"
+        v-model:selected-node-id="selectedNodeId"
+        v-model:current-node-text="currentNodeText"
+        v-model:active-right-tab="activeRightTab"
+        v-model:review-edit-content="reviewEditContent"
+        v-model:review-instructions="reviewInstructions"
+        :selected-novel="selectedNovel"
+        :state-tone="stateTone"
+        :state-label="stateLabel"
+        :writing-form="writingForm"
+        :editor-chat-messages="editorChatMessages"
+        :editor-chat-loading="editorChatLoading"
+        :editor-chat-last-turn="editorChatLastTurn"
+        :editor-skills="editorSkills"
+        :selected-skill-ids="selectedEditorSkillIds"
+        :chapters="chapters"
+        :node-drafts="currentChapterNodeDrafts"
+        :save-loading="saveLoading"
+        :pending-node="pendingNode"
+        :pending-node-title="pendingNodeTitle"
+        :tabs="rightTabs"
+        :word-percent="wordPercent"
+        :chapter-percent="chapterPercent"
+        :progress="progress"
+        :target-word-count="writingForm.target_word_count"
+        :daemon-state="daemonState"
+        :generation-logic="generationLogic"
+        :latest-events="latestEvents"
+        :writing-analysis="writingAnalysis"
+        :analysis-loading="analysisLoading"
+        @send-editor-chat="sendEditorChat"
+        @apply-editor-patch="applyEditorPatch"
+        @toggle-editor-skill="toggleEditorSkill"
+        @start-writing="startWriting"
+        @pause-writing="pauseWriting"
+        @resume-writing="resumeWriting"
+        @export-text="exportText"
+        @save-chapter="saveCurrentChapter"
+        @save-node="saveCurrentNode"
+        @toggle-node-lock="toggleNodeLock"
+        @review-decision="submitReviewDecision"
+        @analyze-current-text="analyzeCurrentText"
+      />
 
       <ConfigPage v-else-if="route === 'config'" :novels="novels" :writing-form="writingForm" @load="loadNovel" @delete="deleteNovel" @test-connection="testConnection" @export-all="exportAllNovels" />
 

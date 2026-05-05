@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from storyforge.infrastructure.persistence import init_db
-from storyforge.interfaces.api.v1 import analyst_router, daemon_router, dissect_router, novel_router, planner_router
+from storyforge.interfaces.api.v1 import analyst_router, cocreation_router, daemon_router, dissect_router, novel_router, planner_router
 
 
 @asynccontextmanager
@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="StoryForge", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="StoryForge", version="0.4.2", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -28,6 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(dissect_router)
+app.include_router(cocreation_router)
 app.include_router(planner_router)
 app.include_router(analyst_router)
 app.include_router(daemon_router)

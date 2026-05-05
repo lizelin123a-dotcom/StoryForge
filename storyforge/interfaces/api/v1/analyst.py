@@ -8,6 +8,7 @@ from storyforge.application.analyst.services.information_gap_service import anal
 from storyforge.application.analyst.services.rhythm_detector import detect_rhythm_for_texts
 from storyforge.application.analyst.services.shuang_point_analyzer import analyze_shuang_points
 from storyforge.application.analyst.services.voice_drift_service import detect_voice_drift
+from storyforge.application.analyst.services.writing_signal_analyzer import analyze_writing_signals
 from storyforge.application.audit.services.chapter_review_service import review_chapter
 
 router = APIRouter(tags=["analyst-audit"])
@@ -35,6 +36,10 @@ class ConflictTrackingRequest(BaseModel):
 class VoiceDriftRequest(BaseModel):
     current_text: str
     baseline_texts: list[str] = []
+
+
+class WritingSignalRequest(BaseModel):
+    text: str = ""
 
 
 @router.post("/api/v1/analyst/shuang-analysis")
@@ -92,3 +97,8 @@ def conflict_tracking(request: ConflictTrackingRequest) -> dict[str, Any]:
 @router.post("/api/v1/analyst/voice-drift")
 def voice_drift(request: VoiceDriftRequest) -> dict[str, Any]:
     return detect_voice_drift(request.current_text, request.baseline_texts)
+
+
+@router.post("/api/v1/analyst/writing-signals")
+def writing_signals(request: WritingSignalRequest) -> dict[str, Any]:
+    return analyze_writing_signals(request.text)

@@ -160,6 +160,7 @@ export const api = {
   deleteNovel: (id: string) => request<{ status: string }>(`/api/v1/novel/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   generateSettings: (data: { logline: string; api_key?: string; api_base_url?: string; model?: string }) =>
     request<GeneratedSettings>('/api/v1/novel/generate-settings', { method: 'POST', body: JSON.stringify(data) }),
+  cocreationTurn: (data: JsonRecord) => request<JsonRecord>('/api/v1/cocreation/turn', { method: 'POST', body: JSON.stringify(data) }),
 
   uploadNovel: (data: JsonRecord) => request<JsonRecord>('/api/v1/dissect/upload', { method: 'POST', body: JSON.stringify(data) }),
   firstPass: (id: string) => request<JsonRecord>(`/api/v1/dissect/${id}/first-pass`, { method: 'POST' }),
@@ -173,6 +174,7 @@ export const api = {
   chapterOutline: (actIndex: number, data: JsonRecord) =>
     request<JsonRecord>(`/api/v1/planner/act/${actIndex}/chapter-outline`, { method: 'POST', body: JSON.stringify(data) }),
   generateNode: (data: JsonRecord) => request<JsonRecord>('/api/v1/writer/generate-node', { method: 'POST', body: JSON.stringify(data) }),
+  writingSignals: (data: { text: string }) => request<JsonRecord>('/api/v1/analyst/writing-signals', { method: 'POST', body: JSON.stringify(data) }),
 
   startDaemon: (data: DaemonStartPayload) =>
     request<{ status: string; novel_id: string }>('/api/v1/daemon/start', { method: 'POST', body: JSON.stringify(data) }),

@@ -1,5 +1,15 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.2
+
+- 将新建作品入口从“一句话直出设定”调整为“共创构思”优先：新增 [`CocreationWizard`](storyforge/frontend/src/components/CocreationWizard.vue)，通过对话逐步沉淀核心灵感、主角欲望、世界规则、核心矛盾、期待钩子、爽点模型和角色关系。
+- 新增共创后端接口 [`/api/v1/cocreation/turn`](storyforge/interfaces/api/v1/cocreation.py)，AI 只追问、归纳和打补丁，不一次性替作者拍板完整设定；LLM 不可用时使用本地共创追问逻辑。
+- 新增当前文本教学检测服务 [`writing_signal_analyzer.py`](storyforge/application/analyst/services/writing_signal_analyzer.py)，检测情绪、钩子、矛盾、爽点、信息差、代入感与角色行动，并关联内置写作知识库给出修改建议。
+- 右侧面板新增“检测”页签，编辑正文时可手动或自动检测当前章节文本，服务人工写作过程，不再只服务 AI 生成流程。
+- `App.vue` 默认右栏切到“检测”，创作台开始向“AI 生成 + 人工编辑 + 实时教学检测”的共创工作台转型。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml)、FastAPI 版本与页面 `APP_VERSION` 均提升至 `0.4.2`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.4.1
 
 - 将写作教学资料正式内置到程序仓库 [`storyforge/knowledge/writing`](storyforge/knowledge/writing)，包含原 `备份/基础` 与 `备份/资料` 下的 58 份 `.docx` 核心写作资料。

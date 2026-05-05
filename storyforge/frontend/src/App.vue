@@ -1,27 +1,28 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { api, getApiBase, setApiBase, type CharacterSetting, type DaemonState, type GeneratedSettings, type NovelDetail, type NovelSummary, type SseEvent } from './api'
 import AboutPage from './components/AboutPage.vue'
 import AppSidebar from './components/AppSidebar.vue'
 import BookcasePage from './components/BookcasePage.vue'
 import ChapterEditor from './components/ChapterEditor.vue'
+import CocreationWizard from './components/CocreationWizard.vue'
 import ConfigPage from './components/ConfigPage.vue'
 import DissectPage from './components/DissectPage.vue'
 import LeftSettingsPanel from './components/LeftSettingsPanel.vue'
 import NoticeToast from './components/NoticeToast.vue'
 import NovelWizard from './components/NovelWizard.vue'
 import RightMonitorPanel from './components/RightMonitorPanel.vue'
-import type { Chapter, RightTab, RouteName, StepState } from './types'
+import type { Chapter, CocreationMessage, CocreationTurn, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.1'
+const APP_VERSION = '0.4.2'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
   { key: 'config', icon: '🛠', label: '配置' },
   { key: 'about', icon: 'ℹ️', label: '关于' },
 ]
-const rightTabs: RightTab[] = ['监控', '审阅', '生成逻辑', '事件']
+const rightTabs: RightTab[] = ['检测', '监控', '审阅', '生成逻辑', '事件']
 
 const emptyState = (novelId = ''): DaemonState => ({
   novel_id: novelId,
@@ -57,7 +58,7 @@ const { events, status: sseStatus, connect } = useSSE()
 const leftCollapsed = ref(false)
 const rightCollapsed = ref(false)
 const settingOpen = ref(true)
-const activeRightTab = ref<RightTab>('监控')
+const activeRightTab = ref<RightTab>('检测')
 const semiAutoMode = ref(false)
 const reviewEditContent = ref('')
 const reviewInstructions = ref('')
@@ -68,6 +69,14 @@ const wizardOpen = ref(false)
 const wizardLoading = ref(false)
 const wizardLogline = ref('')
 const wizardSettings = ref<GeneratedSettings | null>(null)
+const cocreationOpen = ref(false)
+const cocreationLoading = ref(false)
+const cocreationInput = ref('')
+const cocreationMessages = ref<CocreationMessage[]>([])
+const cocreationAssets = ref<Record<string, string>>({})
+const cocreationLastTurn = ref<CocreationTurn | null>(null)
+const writingAnalysis = ref<WritingAnalysis | null>(null)
+const analysisLoading = ref(false)
 
 const writingForm = reactive({
   title: '',
@@ -256,6 +265,11 @@ function persistConfig() {
   setApiBase(writingForm.backendApiBaseUrl)
 }
 
+function openCocreation() {
+  wizardOpen.value = false
+  cocreationOpen.value = true
+}
+
 async function generateNovelSettings() {
   if (wizardLogline.value.trim().length > 100) {
     appNotice.value = '一句话灵感最多 100 个字。'
@@ -269,6 +283,52 @@ async function generateNovelSettings() {
     appNotice.value = `生成设定失败：${String(error)}`
   } finally {
     wizardLoading.value = false
+  }
+}
+
+async function sendCocreationTurn() {
+  const userText = cocreationInput.value.trim() || wizardLogline.value.trim()
+  if (!userText) return
+  try {
+    cocreationLoading.value = true
+    persistConfig()
+    const userMessage: CocreationMessage = { role: 'user', content: userText }
+    cocreationMessages.value.push(userMessage)
+    cocreationInput.value = ''
+    const turn = await api.cocreationTurn({
+      logline: wizardLogline.value,
+      messages: cocreationMessages.value,
+      assets: cocreationAssets.value,
+      api_key: writingForm.apiKey,
+      api_base_url: writingForm.apiBaseUrl,
+      model: writingForm.model,
+    }) as unknown as CocreationTurn
+    cocreationLastTurn.value = turn
+    cocreationAssets.value = { ...cocreationAssets.value, ...(turn.asset_patch || {}) }
+    cocreationMessages.value.push({ role: 'assistant', content: turn.reply })
+  } catch (error) {
+    appNotice.value = `共创讨论失败：${String(error)}`
+  } finally {
+    cocreationLoading.value = false
+  }
+}
+
+async function createNovelFromCocreation() {
+  const assets = cocreationAssets.value
+  const data: GeneratedSettings = {
+    title: assets['核心灵感']?.slice(0, 18) || wizardLogline.value.slice(0, 18) || '未命名作品',
+    world_setting: ['世界规则', '核心矛盾', '期待钩子', '爽点模型'].map((key) => `${key}：${assets[key] || '待补充'}`).join('\n'),
+    characters: [{ name: '主角', role: '主角', description: assets['主角欲望'] || '待补充' }, { name: '对手/阻碍方', role: '反派/阻碍', description: assets['核心矛盾'] || '待补充' }, { name: '关系角色', role: '配角', description: assets['角色关系'] || '待补充' }],
+    genre: '共创项目',
+    target_word_count: Number(writingForm.target_word_count || 120000),
+  }
+  try {
+    const novel = await api.createNovel(data)
+    cocreationOpen.value = false
+    await refreshNovels()
+    await loadNovel(novel.id)
+  } catch (error) {
+    appNotice.value = `创建作品失败：${String(error)}`
   }
 }
 
@@ -348,6 +408,26 @@ async function submitReviewDecision(action: 'approve' | 'rewrite' | 'rollback') 
     appNotice.value = `审阅提交失败：${String(error)}`
   }
 }
+
+async function analyzeCurrentText() {
+  try {
+    analysisLoading.value = true
+    writingAnalysis.value = await api.writingSignals({ text: currentChapterText.value }) as unknown as WritingAnalysis
+    activeRightTab.value = '检测'
+  } catch (error) {
+    appNotice.value = `文本检测失败：${String(error)}`
+  } finally {
+    analysisLoading.value = false
+  }
+}
+
+let analysisTimer = 0
+watch(currentChapterText, () => {
+  window.clearTimeout(analysisTimer)
+  analysisTimer = window.setTimeout(() => {
+    if (currentChapterText.value.trim().length >= 20) void analyzeCurrentText()
+  }, 900)
+})
 
 async function testConnection() {
   try {
@@ -436,7 +516,7 @@ onMounted(async () => {
     <main class="ml-[60px] min-h-screen">
       <NoticeToast :notice="appNotice" @close="appNotice = ''" />
 
-      <BookcasePage v-if="route === 'bookcase'" :novels="novels" @create="wizardOpen = true" @load="loadNovel" />
+      <BookcasePage v-if="route === 'bookcase'" :novels="novels" @create="openCocreation" @load="loadNovel" />
 
       <section v-else-if="route === 'edit'" class="flex h-screen overflow-hidden">
         <LeftSettingsPanel
@@ -473,7 +553,10 @@ onMounted(async () => {
           :pending-node-title="pendingNodeTitle"
           :generation-logic="generationLogic"
           :latest-events="latestEvents"
+          :writing-analysis="writingAnalysis"
+          :analysis-loading="analysisLoading"
           @review-decision="submitReviewDecision"
+          @analyze-current-text="analyzeCurrentText"
         />
       </section>
 
@@ -493,6 +576,21 @@ onMounted(async () => {
 
       <AboutPage v-else :version="APP_VERSION" />
     </main>
+
+    <CocreationWizard
+      :open="cocreationOpen"
+      :loading="cocreationLoading"
+      :logline="wizardLogline"
+      :input="cocreationInput"
+      :messages="cocreationMessages"
+      :assets="cocreationAssets"
+      :last-turn="cocreationLastTurn"
+      @close="cocreationOpen = false"
+      @update:logline="wizardLogline = $event"
+      @update:input="cocreationInput = $event"
+      @send="sendCocreationTurn"
+      @accept="createNovelFromCocreation"
+    />
 
     <NovelWizard
       :open="wizardOpen"

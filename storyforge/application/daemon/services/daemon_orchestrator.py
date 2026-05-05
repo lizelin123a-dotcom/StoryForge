@@ -10,6 +10,7 @@ from storyforge.application.audit.services.chapter_review_service import review_
 from storyforge.application.audit.services.outline_check_service import check_chapter_outline
 from storyforge.application.planner.services.act_planner import generate_act_plans
 from storyforge.application.planner.services.chapter_outliner import generate_chapter_outline
+from storyforge.application.planner.services.fallback import fallback_notice
 from storyforge.application.planner.services.macro_planner import generate_macro_outline
 from storyforge.application.writer.services.consistency_checker import check_node_consistency
 from storyforge.application.writer.services.four_questions import answer_four_questions
@@ -184,11 +185,14 @@ class DaemonOrchestrator:
                 llm=llm,
             )
             self.state["macro_outline"] = macro_outline
+            self._notify_fallback_if_needed(macro_outline)
             self._notify("planning_complete", {"acts": macro_outline.get("acts", [])})
 
             self.state["current_phase"] = "acts"
             act_plans = generate_act_plans(macro_outline, llm=llm)
             self.state["act_plans"] = act_plans
+            for act_plan in act_plans:
+                self._notify_fallback_if_needed(act_plan)
             total_chapters = sum(len(act.get("chapters", [])) for act in act_plans)
             if total_chapters <= 0:
                 total_chapters = sum(int(act.get("chapter_count", 0)) for act in macro_outline.get("acts", [])) or 1
@@ -381,6 +385,11 @@ class DaemonOrchestrator:
             f"读者期待是“{node.reader_expectation}”。写作四问：{questions.model_dump() if hasattr(questions, 'model_dump') else questions}。"
             f"参考上下文：{context_brief[:500]}"
         )
+
+    def _notify_fallback_if_needed(self, payload: Any) -> None:
+        notice = fallback_notice(payload)
+        if notice:
+            self._notify("llm_fallback_used", notice)
 
     def _rewrite_with_feedback(self, chapter_index: int, review_data: dict[str, Any]) -> None:
         warnings = []

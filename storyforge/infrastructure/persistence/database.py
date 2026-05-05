@@ -1,4 +1,5 @@
 import os
+import shutil
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -11,7 +12,24 @@ PROJECT_ROOT = PACKAGE_ROOT.parent
 DEFAULT_DATA_DIR = PROJECT_ROOT / "data"
 DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_DATABASE_PATH = DEFAULT_DATA_DIR / "storyforge.db"
+LEGACY_DATABASE_PATHS = (
+    PROJECT_ROOT / "storyforge.db",
+    PACKAGE_ROOT / "storyforge.db",
+)
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}")
+
+
+def _maybe_migrate_legacy_sqlite() -> None:
+    if os.getenv("DATABASE_URL") or DEFAULT_DATABASE_PATH.exists():
+        return
+    for legacy_path in LEGACY_DATABASE_PATHS:
+        if legacy_path.exists() and legacy_path.is_file() and legacy_path.stat().st_size > 0:
+            DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy_path, DEFAULT_DATABASE_PATH)
+            return
+
+
+_maybe_migrate_legacy_sqlite()
 
 
 class Base(DeclarativeBase):

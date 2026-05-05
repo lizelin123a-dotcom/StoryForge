@@ -32,11 +32,17 @@ def generate_chapter_outline(
 章节序号：{chapter_index}
 章节功能：{chapter_function}
 """
+    fallback_reason = ""
     try:
         raw_nodes = extract_json_array(llm(prompt, SYSTEM_PROMPT, True))
-    except Exception:
+    except Exception as exc:
+        fallback_reason = str(exc)
         raw_nodes = _fallback_nodes(chapter_index, chapter_function)
-    return _normalize_nodes(raw_nodes, chapter_index)
+    nodes = _normalize_nodes(raw_nodes, chapter_index)
+    if fallback_reason:
+        for node in nodes:
+            node.content = (node.content or "") + f"\n<!-- fallback: chapter_outline; reason={fallback_reason} -->"
+    return nodes
 
 
 def _normalize_nodes(raw_nodes: list[Any], chapter_index: int) -> list[ChapterNode]:

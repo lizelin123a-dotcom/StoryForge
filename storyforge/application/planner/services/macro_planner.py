@@ -3,6 +3,7 @@ from typing import Callable, Any
 from storyforge.domain.dissect.dissected_chapter import DissectedChapter
 from storyforge.infrastructure.ai.openai_adapter import call_llm
 from storyforge.application.dissect.services.common import extract_json_object
+from storyforge.application.planner.services.fallback import mark_fallback
 
 LLMCaller = Callable[[str, str, bool], str]
 
@@ -50,9 +51,9 @@ def generate_macro_outline(
 """
     try:
         return extract_json_object(llm(prompt, SYSTEM_PROMPT, True))
-    except Exception:
+    except Exception as exc:
         per_act = max(target_word_count // 3, 1)
-        return {
+        return mark_fallback({
             "title": title,
             "genre": genre,
             "target_word_count": target_word_count,
@@ -61,4 +62,4 @@ def generate_macro_outline(
                 {"index": 2, "name": "第二幕：升级与对抗", "function": "持续加压、扩大信息差、积累复利爽感", "target_word_count": per_act, "core_conflict": "主角成长速度与敌对势力围剿", "key_events": ["资源争夺", "身份反转", "阶段性碾压"], "chapter_count": max(per_act // 3000, 1)},
                 {"index": 3, "name": "第三幕：爆发与收束", "function": "集中兑现伏笔并完成终局爽点", "target_word_count": target_word_count - per_act * 2, "core_conflict": "终极敌人与主角底层目标决战", "key_events": ["终局压迫", "底牌揭露", "最终爆发"], "chapter_count": max((target_word_count - per_act * 2) // 3000, 1)},
             ],
-        }
+        }, "macro_outline", exc)

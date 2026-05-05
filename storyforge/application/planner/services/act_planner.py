@@ -2,6 +2,7 @@ from typing import Callable, Any
 
 from storyforge.infrastructure.ai.openai_adapter import call_llm
 from storyforge.application.dissect.services.common import extract_json_array
+from storyforge.application.planner.services.fallback import mark_fallback
 
 LLMCaller = Callable[[str, str, bool], str]
 
@@ -17,7 +18,7 @@ def generate_act_plans(macro_outline: dict[str, Any], llm: LLMCaller = call_llm)
 """
     try:
         return extract_json_array(llm(prompt, SYSTEM_PROMPT, True))
-    except Exception:
+    except Exception as exc:
         acts: list[dict[str, Any]] = []
         global_chapter = 1
         for act in macro_outline.get("acts", []):
@@ -39,4 +40,6 @@ def generate_act_plans(macro_outline: dict[str, Any], llm: LLMCaller = call_llm)
                 "conflict_evolution": ["引出矛盾", "连续加压", "阶段爆发"],
                 "chapters": chapters,
             })
+        if acts:
+            acts[0] = mark_fallback(acts[0], "act_plans", exc)
         return acts

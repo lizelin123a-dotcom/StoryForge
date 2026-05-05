@@ -229,6 +229,9 @@ function applyEvent(event: SseEvent) {
     activeChapter.value = index
   }
   if (event.data?.generation_logic) generationLogic.value.unshift(String(event.data.generation_logic))
+  if (event.type === 'llm_fallback_used') {
+    appNotice.value = `LLM 调用失败，已使用本地兜底模板：${String(event.data?.stage || 'unknown')}`
+  }
   if (event.type === 'node_review_required') {
     reviewEditContent.value = String(event.data?.content || pendingNode.value?.content || '')
     activeRightTab.value = '审阅'

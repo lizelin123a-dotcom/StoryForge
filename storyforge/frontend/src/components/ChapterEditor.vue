@@ -9,6 +9,8 @@ defineProps<{
   selectedNodeId: string
   currentNodeText: string
   saveLoading: boolean
+  pendingNode: Record<string, unknown> | null
+  pendingNodeTitle: string
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +21,7 @@ const emit = defineEmits<{
   saveChapter: []
   saveNode: []
   toggleNodeLock: [node: NodeDraft]
+  reviewDecision: [action: 'approve' | 'rewrite' | 'rollback']
 }>()
 </script>
 
@@ -40,8 +43,8 @@ const emit = defineEmits<{
 
       <aside class="min-h-0 overflow-y-auto border-l border-[#2a2a2a] bg-[#121212] p-4">
         <div class="mb-3 flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-white">节点草稿</h3>
-          <button class="rounded-lg border border-[#2a2a2a] px-2 py-1 text-xs text-zinc-400 hover:text-white" :disabled="!selectedNodeId" @click="emit('saveNode')">保存节点</button>
+          <h3 class="text-sm font-semibold text-white">节点草稿 / 审阅</h3>
+          <button class="rounded-lg border border-[#2a2a2a] px-2 py-1 text-xs text-zinc-400 hover:text-white" :disabled="!selectedNodeId" @click="emit('saveNode')">保存草稿</button>
         </div>
         <div class="space-y-2">
           <button v-for="node in nodeDrafts" :key="node.id" class="w-full rounded-xl border p-3 text-left text-xs" :class="selectedNodeId === node.id ? 'border-indigo-500/50 bg-indigo-500/15 text-white' : 'border-[#2a2a2a] bg-[#1a1a1a] text-zinc-400 hover:text-zinc-200'" @click="emit('update:selectedNodeId', node.id)">
@@ -51,7 +54,13 @@ const emit = defineEmits<{
           <p v-if="!nodeDrafts.length" class="rounded-xl border border-dashed border-[#333] p-4 text-sm leading-7 text-zinc-500">还没有节点草稿。AI 生成节点后会自动沉淀；你也可以先保存整章正文。</p>
         </div>
         <div v-if="selectedNodeId" class="mt-4">
+          <div v-if="pendingNode" class="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">当前待审阅：{{ pendingNodeTitle }}。直接在下面编辑草稿，通过后才会写入中间正文。</div>
           <textarea :value="currentNodeText" rows="10" class="w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm leading-7 text-zinc-200" @input="emit('update:currentNodeText', ($event.target as HTMLTextAreaElement).value)" />
+          <div v-if="pendingNode" class="mt-2 grid grid-cols-3 gap-2">
+            <button class="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-medium text-emerald-950" @click="emit('reviewDecision', 'approve')">通过写入</button>
+            <button class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200" @click="emit('reviewDecision', 'rewrite')">修改后通过</button>
+            <button class="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200" @click="emit('reviewDecision', 'rollback')">回滚</button>
+          </div>
           <button v-if="nodeDrafts.find((node) => node.id === selectedNodeId)" class="mt-2 w-full rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200" @click="emit('toggleNodeLock', nodeDrafts.find((node) => node.id === selectedNodeId)!)">{{ nodeDrafts.find((node) => node.id === selectedNodeId)?.locked ? '解锁该节点' : '锁定该节点' }}</button>
         </div>
       </aside>

@@ -78,7 +78,10 @@ const emit = defineEmits<{
       </div>
 
       <div v-else-if="activeTab === '审阅'" class="space-y-3">
-        <div v-if="pendingNode" class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4"><div class="mb-2 text-sm font-medium text-amber-200">节点审阅：{{ pendingNodeTitle }}</div><textarea :value="reviewEditContent" rows="10" class="mt-3 w-full rounded-xl border border-amber-500/30 bg-[#0f0f0f] p-3 text-sm leading-7 text-zinc-200" @input="emit('update:reviewEditContent', ($event.target as HTMLTextAreaElement).value)" /><textarea :value="reviewInstructions" rows="3" placeholder="给后续内容或重写使用的修改意见" class="mt-2 w-full rounded-xl border border-amber-500/30 bg-[#0f0f0f] p-3 text-sm text-zinc-200" @input="emit('update:reviewInstructions', ($event.target as HTMLTextAreaElement).value)" /><div class="mt-3 grid grid-cols-3 gap-2 text-xs font-medium"><button class="rounded-xl bg-emerald-500 px-3 py-2 text-emerald-950" @click="emit('reviewDecision', 'approve')">通过并同步</button><button class="rounded-xl bg-amber-500 px-3 py-2 text-amber-950" @click="emit('reviewDecision', 'rewrite')">替换/重写</button><button class="rounded-xl bg-red-500 px-3 py-2 text-white" @click="emit('reviewDecision', 'rollback')">回滚节点</button></div></div>
+        <div v-if="pendingNode" class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm leading-7 text-amber-100">
+          <div class="mb-2 font-medium">正在审阅：{{ pendingNodeTitle }}</div>
+          <p class="text-xs text-zinc-400">审阅内容已经合并到中间右侧的“节点草稿 / 审阅”编辑器，请在那里直接修改、通过或回滚。这里不再重复弹第二个编辑框。</p>
+        </div>
         <div v-else class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 text-sm text-zinc-400">当前没有待审阅节点。</div>
       </div>
 

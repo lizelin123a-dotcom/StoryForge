@@ -15,7 +15,7 @@ import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, EditorSkill, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.9'
+const APP_VERSION = '0.4.10'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -252,11 +252,22 @@ function syncChaptersFromState(state: DaemonState) {
   syncChaptersFromTexts(state.chapter_texts || [])
 }
 
+function pendingNodeDraftId(node = pendingNode.value) {
+  if (!node) return ''
+  return `${selectedNovelId.value}:chapter:${Number(node.chapter_index) || 1}:node:${Number(node.node_index) || 1}`
+}
+
 function syncPendingEdit() {
   if (!pendingNode.value) {
     reviewEditContent.value = ''
     reviewInstructions.value = ''
     return
+  }
+  const draftId = pendingNodeDraftId()
+  if (draftId) {
+    selectedNodeId.value = draftId
+    const draft = nodeDrafts.value.find((node) => node.id === draftId)
+    if (draft) draft.content = String(pendingNode.value.content || draft.content || '')
   }
   if (pendingNode.value.content && !reviewEditContent.value) reviewEditContent.value = String(pendingNode.value.content)
 }
@@ -305,7 +316,9 @@ function applyEvent(event: SseEvent) {
   }
   if (event.type === 'node_review_required') {
     reviewEditContent.value = String(event.data?.content || pendingNode.value?.content || '')
-    activeRightTab.value = '审阅'
+    const index = Math.max(0, (Number(event.data?.chapter_index) || 1) - 1)
+    activeChapter.value = index
+    selectedNodeId.value = `${event.state?.novel_id || selectedNovelId.value}:chapter:${index + 1}:node:${Number(event.data?.node_index) || 1}`
   }
   if (event.type === 'node_review_resolved') {
     reviewEditContent.value = ''
@@ -578,7 +591,8 @@ async function resumeWriting() {
 
 async function submitReviewDecision(action: 'approve' | 'rewrite' | 'rollback') {
   try {
-    const payload = { content: reviewEditContent.value, instructions: reviewInstructions.value }
+    const reviewContent = selectedNode.value?.content ?? reviewEditContent.value
+    const payload = { content: String(reviewContent || ''), instructions: reviewInstructions.value }
     const payloadWithNovel = { ...payload, novel_id: selectedNovelId.value }
     if (action === 'approve') await api.approveNode(payloadWithNovel)
     if (action === 'rewrite') await api.rewriteNode(payloadWithNovel)
@@ -734,9 +748,12 @@ onMounted(async () => {
           :chapters="chapters"
           :node-drafts="currentChapterNodeDrafts"
           :save-loading="saveLoading"
+          :pending-node="pendingNode"
+          :pending-node-title="pendingNodeTitle"
           @save-chapter="saveCurrentChapter"
           @save-node="saveCurrentNode"
           @toggle-node-lock="toggleNodeLock"
+          @review-decision="submitReviewDecision"
         />
         <RightMonitorPanel
           v-model:collapsed="rightCollapsed"

@@ -1,5 +1,14 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.5
+
+- 创作台左侧改为 VSCode 式“创作对话”主面板：写作过程中可持续和 AI 编辑讨论章节推进、人物动机、反转、爽点、钩子等思路。
+- 左侧对话接入 `/api/v1/cocreation/turn`，AI 会从对话中归纳 `asset_patch`，并自动调用资产保存接口写入作品资产，减少手动填表式编辑。
+- 左侧下半区改为“资产与操作”：展示 AI 已沉淀资产，并保留启动/暂停/继续/导出、半自动模式、目标字数和高级 LLM 配置。
+- 创作台布局进一步靠近“左侧 AI 编辑对话 + 中间正文与节点草稿 + 右侧教学检测”的工作台形态。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml)、FastAPI 版本与页面 `APP_VERSION` 均提升至 `0.4.5`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.4.4
 
 - `build_governed_context` 接入持久化共创资产 `novel_assets` 和已锁定节点 `locked_nodes`，将作者确认过的作品骨架与人工节点作为高优先级上下文。

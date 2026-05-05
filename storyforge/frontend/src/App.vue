@@ -15,7 +15,7 @@ import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, CocreationMessage, CocreationTurn, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.4'
+const APP_VERSION = '0.4.5'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -78,6 +78,10 @@ const cocreationInput = ref('')
 const cocreationMessages = ref<CocreationMessage[]>([])
 const cocreationAssets = ref<Record<string, string>>({})
 const cocreationLastTurn = ref<CocreationTurn | null>(null)
+const editorChatInput = ref('')
+const editorChatMessages = ref<CocreationMessage[]>([])
+const editorChatLoading = ref(false)
+const editorChatLastTurn = ref<CocreationTurn | null>(null)
 const writingAnalysis = ref<WritingAnalysis | null>(null)
 const analysisLoading = ref(false)
 
@@ -392,6 +396,36 @@ async function sendCocreationTurn() {
   }
 }
 
+async function sendEditorChat() {
+  if (!selectedNovel.value || !editorChatInput.value.trim()) return
+  try {
+    editorChatLoading.value = true
+    persistConfig()
+    const userMessage: CocreationMessage = { role: 'user', content: editorChatInput.value.trim() }
+    editorChatMessages.value.push(userMessage)
+    editorChatInput.value = ''
+    const turn = await api.cocreationTurn({
+      logline: selectedNovel.value.title,
+      messages: editorChatMessages.value,
+      assets: selectedNovel.value.assets || {},
+      api_key: writingForm.apiKey,
+      api_base_url: writingForm.apiBaseUrl,
+      model: writingForm.model,
+    }) as unknown as CocreationTurn
+    editorChatLastTurn.value = turn
+    editorChatMessages.value.push({ role: 'assistant', content: turn.reply })
+    if (Object.keys(turn.asset_patch || {}).length) {
+      const result = await api.saveAssets(selectedNovel.value.id, { assets: turn.asset_patch })
+      selectedNovel.value = { ...selectedNovel.value, assets: result.assets }
+      appNotice.value = 'AI 编辑已把本轮确认内容写入作品资产。'
+    }
+  } catch (error) {
+    appNotice.value = `创作对话失败：${String(error)}`
+  } finally {
+    editorChatLoading.value = false
+  }
+}
+
 async function createNovelFromCocreation() {
   const assets = cocreationAssets.value
   const data: GeneratedSettings = {
@@ -604,10 +638,15 @@ onMounted(async () => {
           v-model:setting-open="settingOpen"
           v-model:semi-auto-mode="semiAutoMode"
           v-model:dissect-source-id="dissectSourceId"
+          v-model:editor-chat-input="editorChatInput"
           :selected-novel="selectedNovel"
           :state-tone="stateTone"
           :state-label="stateLabel"
           :writing-form="writingForm"
+          :editor-chat-messages="editorChatMessages"
+          :editor-chat-loading="editorChatLoading"
+          :editor-chat-last-turn="editorChatLastTurn"
+          @send-editor-chat="sendEditorChat"
           @start-writing="startWriting"
           @pause-writing="pauseWriting"
           @resume-writing="resumeWriting"

@@ -7,8 +7,7 @@ from zipfile import ZipFile
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = PACKAGE_ROOT.parent
-DEFAULT_EXTERNAL_KNOWLEDGE_DIR = PROJECT_ROOT.parent / "备份"
+EMBEDDED_KNOWLEDGE_DIR = PACKAGE_ROOT / "knowledge" / "writing"
 
 KEYWORD_GROUPS: dict[str, tuple[str, ...]] = {
     "开篇": ("开篇", "开头", "第一章"),
@@ -24,14 +23,18 @@ KEYWORD_GROUPS: dict[str, tuple[str, ...]] = {
 @lru_cache(maxsize=1)
 def load_writing_knowledge() -> list[dict[str, str]]:
     entries: list[dict[str, str]] = []
-    for root in _candidate_roots():
-        if not root.exists():
+    if not EMBEDDED_KNOWLEDGE_DIR.exists():
+        return entries
+    for path in sorted(EMBEDDED_KNOWLEDGE_DIR.rglob("*.docx")):
+        text = _read_docx_text(path)
+        if not text:
             continue
-        for path in sorted(root.rglob("*.docx")):
-            text = _read_docx_text(path)
-            if not text:
-                continue
-            entries.append({"title": path.stem, "path": str(path), "content": text[:3000]})
+        entries.append({
+            "title": path.stem,
+            "category": path.parent.name,
+            "path": str(path.relative_to(PACKAGE_ROOT)),
+            "content": text[:3000],
+        })
     return entries
 
 
@@ -55,17 +58,9 @@ def select_writing_guidance(*keywords: str, limit: int = 5, max_chars: int = 420
         if len(selected) >= limit or used_chars >= max_chars:
             break
         excerpt = _excerpt(entry["content"], normalized_keywords, max_chars=max(500, (max_chars - used_chars) // max(1, limit - len(selected))))
-        selected.append({"title": entry["title"], "path": entry["path"], "content": excerpt})
+        selected.append({"title": entry["title"], "category": entry.get("category", ""), "path": entry["path"], "content": excerpt})
         used_chars += len(excerpt)
     return selected
-
-
-def _candidate_roots() -> tuple[Path, ...]:
-    return (
-        Path(__file__).resolve().parents[4] / "备份",
-        DEFAULT_EXTERNAL_KNOWLEDGE_DIR,
-        PROJECT_ROOT / "knowledge",
-    )
 
 
 def _read_docx_text(path: Path) -> str:

@@ -14,7 +14,7 @@ import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, RightTab, RouteName, StepState } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.0'
+const APP_VERSION = '0.4.1'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },

@@ -1,5 +1,13 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.1
+
+- 将写作教学资料正式内置到程序仓库 [`storyforge/knowledge/writing`](storyforge/knowledge/writing)，包含原 `备份/基础` 与 `备份/资料` 下的 58 份 `.docx` 核心写作资料。
+- `writing_knowledge.py` 改为只读取内置知识库，不再依赖 `C:\\Users\\25109\\Desktop\\备份` 等外部本机路径，保证项目在其他终端和机器上也能运行。
+- 知识库条目路径改为相对 `storyforge` 包路径，返回 `category`、`title`、`path`、`content`，便于后续知识库页面和检索 API 使用。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml) 与页面 `APP_VERSION` 均提升至 `0.4.1`。
+- 验证通过：`python -m compileall -q storyforge`、知识库加载测试与 `npm run build`。
+
 ## 2026-05-05 · v0.4.0
 
 - 明确本地规则来源：`C:\\Users\\25109\\Desktop\\备份` 下的资料是写作教学知识库，不再在用户可见文案中称为“普通模板”。

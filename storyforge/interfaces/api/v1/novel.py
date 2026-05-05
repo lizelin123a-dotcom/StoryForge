@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from storyforge.infrastructure.ai.openai_adapter import call_llm
-from storyforge.infrastructure.persistence.novel_repository import create_novel, delete_novel, get_novel, list_novels, update_target_word_count
+from storyforge.infrastructure.persistence.novel_repository import create_novel, delete_novel, get_novel, list_node_drafts, list_novels, save_chapter_text, save_node_draft, update_target_word_count, upsert_novel_assets
 
 router = APIRouter(tags=["novel"])
 LLM_CONFIG_PATH = Path(__file__).resolve().parents[3] / "llm_config.json"
@@ -30,6 +30,25 @@ class NovelCreateRequest(BaseModel):
 
 class NovelUpdateRequest(BaseModel):
     target_word_count: int | None = Field(default=None, ge=1)
+
+
+class ChapterSaveRequest(BaseModel):
+    chapter_index: int = Field(ge=1)
+    content: str = ""
+    title: str | None = None
+
+
+class NodeDraftSaveRequest(BaseModel):
+    chapter_index: int = Field(ge=1)
+    node_index: int = Field(ge=1)
+    node_type: str = ""
+    content: str = ""
+    locked: bool = False
+    source: str = "manual"
+
+
+class NovelAssetsSaveRequest(BaseModel):
+    assets: dict[str, Any] = Field(default_factory=dict)
 
 
 class GenerateSettingsRequest(BaseModel):
@@ -65,6 +84,35 @@ def novel_create(request: NovelCreateRequest) -> dict[str, Any]:
 @router.post("/api/v1/novel")
 def novel_create_compat(request: NovelCreateRequest) -> dict[str, Any]:
     return _create_from_request(request)
+
+
+@router.post("/api/v1/novel/{novel_id}/chapter")
+def novel_save_chapter(novel_id: str, request: ChapterSaveRequest) -> dict[str, Any]:
+    if get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail="novel not found")
+    save_chapter_text(novel_id, request.chapter_index, request.content, request.title)
+    return get_novel(novel_id) or {}
+
+
+@router.get("/api/v1/novel/{novel_id}/nodes")
+def novel_nodes(novel_id: str) -> dict[str, Any]:
+    if get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail="novel not found")
+    return {"items": list_node_drafts(novel_id)}
+
+
+@router.post("/api/v1/novel/{novel_id}/node")
+def novel_save_node(novel_id: str, request: NodeDraftSaveRequest) -> dict[str, Any]:
+    if get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail="novel not found")
+    return save_node_draft(novel_id, request.chapter_index, request.node_index, request.node_type, request.content, request.locked, request.source)
+
+
+@router.post("/api/v1/novel/{novel_id}/assets")
+def novel_save_assets(novel_id: str, request: NovelAssetsSaveRequest) -> dict[str, Any]:
+    if get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail="novel not found")
+    return {"assets": upsert_novel_assets(novel_id, request.assets)}
 
 
 @router.patch("/api/v1/novel/{novel_id}")

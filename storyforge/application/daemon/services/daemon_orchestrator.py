@@ -20,7 +20,7 @@ from storyforge.domain.dissect.dissected_chapter import DissectedChapter
 from storyforge.domain.node.node import ChapterNode
 from storyforge.infrastructure.ai.openai_adapter import call_llm
 from storyforge.infrastructure.persistence.daemon_state_repository import save_daemon_state
-from storyforge.infrastructure.persistence.novel_repository import save_chapter_text
+from storyforge.infrastructure.persistence.novel_repository import save_chapter_text, save_node_draft
 
 Listener = Callable[[dict[str, Any]], None]
 
@@ -269,6 +269,7 @@ class DaemonOrchestrator:
             filled = generate_node_content(node, context, questions, llm=llm)
             if filled.content and "【本地写作教学规则生成】" in filled.content:
                 self._notify("llm_fallback_used", {"stage": "node_content", "reason": "node generation failed; local writing rules used"})
+            save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai")
             self._notify(
                 "node_generated",
                 {
@@ -376,7 +377,9 @@ class DaemonOrchestrator:
         if decision.get("type") == "rolled_back":
             return None
         if decision.get("content") is not None:
-            return node.model_copy(update={"content": str(decision.get("content") or "")})
+            content = str(decision.get("content") or "")
+            save_node_draft(self.state["novel_id"], chapter_index, node.index, node.node_type, content, locked=True, source="manual_review")
+            return node.model_copy(update={"content": content})
         return node
 
     def _build_generation_logic(self, node: ChapterNode, questions: Any, context: Any) -> str:

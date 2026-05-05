@@ -1,6 +1,7 @@
 export type RouteName = 'bookcase' | 'edit' | 'dissect' | 'config' | 'about'
 export type StepState = '待执行' | '执行中' | '已完成' | '失败'
-export type Chapter = { title: string; content: string; nodeLabel: string; nodesDone: number; nodesTotal: number }
+export type Chapter = { title: string; content: string; nodeLabel: string; nodesDone: number; nodesTotal: number; dirty?: boolean }
+export type NodeDraft = { id: string; chapter_index: number; node_index: number; node_type: string; content: string; locked: boolean; source: string; updated_at?: string }
 export type RightTab = '检测' | '监控' | '审阅' | '生成逻辑' | '事件'
 
 export type WritingSignal = { name: string; score: number; hits: string[]; status: string }

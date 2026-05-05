@@ -48,6 +48,23 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _migrate_sqlite_novels_table()
+    _migrate_sqlite_node_drafts_table()
+
+
+def _migrate_sqlite_node_drafts_table() -> None:
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    inspector = inspect(engine)
+    if "node_drafts" not in inspector.get_table_names():
+        return
+    existing_columns = {column["name"] for column in inspector.get_columns("node_drafts")}
+    migrations: Iterable[tuple[str, str]] = (
+        ("source", "ALTER TABLE node_drafts ADD COLUMN source VARCHAR DEFAULT 'ai'"),
+    )
+    with engine.begin() as connection:
+        for column_name, statement in migrations:
+            if column_name not in existing_columns:
+                connection.execute(text(statement))
 
 
 def _migrate_sqlite_novels_table() -> None:

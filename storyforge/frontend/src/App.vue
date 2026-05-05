@@ -12,10 +12,10 @@ import LeftSettingsPanel from './components/LeftSettingsPanel.vue'
 import NoticeToast from './components/NoticeToast.vue'
 import NovelWizard from './components/NovelWizard.vue'
 import RightMonitorPanel from './components/RightMonitorPanel.vue'
-import type { Chapter, CocreationMessage, CocreationTurn, RightTab, RouteName, StepState, WritingAnalysis } from './types'
+import type { Chapter, CocreationMessage, CocreationTurn, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.2'
+const APP_VERSION = '0.4.3'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -52,6 +52,9 @@ const selectedNovel = ref<NovelDetail | null>(null)
 const selectedNovelId = computed(() => selectedNovel.value?.id || routeNovelId.value || '')
 const chapters = ref<Chapter[]>([])
 const activeChapter = ref(0)
+const nodeDrafts = ref<NodeDraft[]>([])
+const selectedNodeId = ref('')
+const saveLoading = ref(false)
 const daemonState = ref<DaemonState>(emptyState())
 const { events, status: sseStatus, connect } = useSSE()
 
@@ -123,7 +126,19 @@ const currentChapter = computed(() => chapters.value[activeChapter.value] || cha
 const currentChapterText = computed({
   get: () => currentChapter.value?.content || '',
   set: (value: string) => {
-    if (currentChapter.value) currentChapter.value.content = value
+    if (currentChapter.value) {
+      currentChapter.value.content = value
+      currentChapter.value.dirty = true
+    }
+  },
+})
+const currentChapterIndex = computed(() => activeChapter.value + 1)
+const currentChapterNodeDrafts = computed(() => nodeDrafts.value.filter((node) => Number(node.chapter_index) === currentChapterIndex.value))
+const selectedNode = computed(() => nodeDrafts.value.find((node) => node.id === selectedNodeId.value) || null)
+const currentNodeText = computed({
+  get: () => selectedNode.value?.content || '',
+  set: (value: string) => {
+    if (selectedNode.value) selectedNode.value.content = value
   },
 })
 const characterLines = computed(() => selectedNovel.value?.characters?.map(formatCharacter).join('\n') || '')
@@ -181,6 +196,7 @@ async function loadNovel(id: string) {
     writingForm.characters = novel.characters?.map(formatCharacter).join('\n') || ''
     writingForm.genre = novel.genre || ''
     writingForm.target_word_count = Number(novel.target_word_count || 120000)
+    nodeDrafts.value = normalizeNodeDrafts(novel.node_drafts || [])
     if (novel.chapter_texts?.length) {
       syncChaptersFromTexts(novel.chapter_texts)
     }
@@ -192,6 +208,19 @@ async function loadNovel(id: string) {
   }
 }
 
+function normalizeNodeDrafts(rows: unknown[]): NodeDraft[] {
+  return rows.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object').map((row) => ({
+    id: String(row.id || `${row.novel_id}:chapter:${row.chapter_index}:node:${row.node_index}`),
+    chapter_index: Number(row.chapter_index || 1),
+    node_index: Number(row.node_index || 1),
+    node_type: String(row.node_type || '节点'),
+    content: String(row.content || ''),
+    locked: Boolean(row.locked),
+    source: String(row.source || 'ai'),
+    updated_at: String(row.updated_at || ''),
+  }))
+}
+
 function syncChaptersFromTexts(texts: string[]) {
   chapters.value = texts.map((text, index) => ({
     title: `第 ${index + 1} 章`,
@@ -199,6 +228,7 @@ function syncChaptersFromTexts(texts: string[]) {
     nodeLabel: '已完成',
     nodesDone: 7,
     nodesTotal: 7,
+    dirty: false,
   }))
   if (!chapters.value.length) activeChapter.value = 0
   if (activeChapter.value >= chapters.value.length) activeChapter.value = Math.max(0, chapters.value.length - 1)
@@ -239,6 +269,16 @@ function applyEvent(event: SseEvent) {
     const index = Math.max(0, (Number(event.data.chapter_index) || 1) - 1)
     while (chapters.value.length <= index) chapters.value.push({ title: `第 ${chapters.value.length + 1} 章`, content: '', nodeLabel: '写作中', nodesDone: 0, nodesTotal: 7 })
     chapters.value[index].content += `${chapters.value[index].content ? '\n\n' : ''}${String(event.data.content)}`
+    chapters.value[index].dirty = false
+    upsertNodeDraft({
+      id: `${event.state?.novel_id || selectedNovelId.value}:chapter:${index + 1}:node:${Number(event.data.node_index) || 1}`,
+      chapter_index: index + 1,
+      node_index: Number(event.data.node_index) || 1,
+      node_type: String(event.data.node_type || '节点'),
+      content: String(event.data.content || ''),
+      locked: false,
+      source: 'ai',
+    })
     chapters.value[index].nodesDone = Number(event.data.node_index) || chapters.value[index].nodesDone + 1
     chapters.value[index].nodeLabel = String(event.data.node_type || '节点生成')
     activeChapter.value = index
@@ -256,6 +296,45 @@ function applyEvent(event: SseEvent) {
     reviewInstructions.value = ''
   }
   syncPendingEdit()
+}
+
+function upsertNodeDraft(node: NodeDraft) {
+  const existing = nodeDrafts.value.findIndex((item) => item.id === node.id)
+  if (existing >= 0) nodeDrafts.value[existing] = { ...nodeDrafts.value[existing], ...node }
+  else nodeDrafts.value.push(node)
+  if (!selectedNodeId.value) selectedNodeId.value = node.id
+}
+
+async function saveCurrentChapter() {
+  if (!selectedNovelId.value || !currentChapter.value) return
+  try {
+    saveLoading.value = true
+    const novel = await api.saveChapter(selectedNovelId.value, { chapter_index: currentChapterIndex.value, title: currentChapter.value.title, content: currentChapterText.value })
+    selectedNovel.value = novel
+    currentChapter.value.dirty = false
+    appNotice.value = '章节已保存。'
+  } catch (error) {
+    appNotice.value = `章节保存失败：${String(error)}`
+  } finally {
+    saveLoading.value = false
+  }
+}
+
+async function saveCurrentNode() {
+  if (!selectedNovelId.value || !selectedNode.value) return
+  try {
+    const saved = await api.saveNode(selectedNovelId.value, { ...selectedNode.value, content: currentNodeText.value, source: 'manual' }) as unknown as NodeDraft
+    upsertNodeDraft(saved)
+    appNotice.value = '节点已保存。'
+  } catch (error) {
+    appNotice.value = `节点保存失败：${String(error)}`
+  }
+}
+
+async function toggleNodeLock(node: NodeDraft) {
+  if (!selectedNovelId.value) return
+  const saved = await api.saveNode(selectedNovelId.value, { ...node, locked: !node.locked, source: node.source || 'manual' }) as unknown as NodeDraft
+  upsertNodeDraft(saved)
 }
 
 function persistConfig() {
@@ -324,6 +403,7 @@ async function createNovelFromCocreation() {
   }
   try {
     const novel = await api.createNovel(data)
+    await api.saveAssets(novel.id, { assets })
     cocreationOpen.value = false
     await refreshNovels()
     await loadNovel(novel.id)
@@ -536,7 +616,14 @@ onMounted(async () => {
         <ChapterEditor
           v-model:active-chapter="activeChapter"
           v-model:current-chapter-text="currentChapterText"
+          v-model:selected-node-id="selectedNodeId"
+          v-model:current-node-text="currentNodeText"
           :chapters="chapters"
+          :node-drafts="currentChapterNodeDrafts"
+          :save-loading="saveLoading"
+          @save-chapter="saveCurrentChapter"
+          @save-node="saveCurrentNode"
+          @toggle-node-lock="toggleNodeLock"
         />
         <RightMonitorPanel
           v-model:collapsed="rightCollapsed"

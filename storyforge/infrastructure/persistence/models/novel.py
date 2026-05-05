@@ -23,6 +23,17 @@ class NovelModel(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class NovelAssetModel(Base):
+    __tablename__ = "novel_assets"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    novel_id: Mapped[str] = mapped_column(String, ForeignKey("novels.id"), nullable=False)
+    key: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class VolumeModel(Base):
     __tablename__ = "volumes"
 
@@ -43,3 +54,18 @@ class ChapterModel(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str] = mapped_column(Text, default="")
     word_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class NodeDraftModel(Base):
+    __tablename__ = "node_drafts"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    novel_id: Mapped[str] = mapped_column(String, ForeignKey("novels.id"), nullable=False)
+    chapter_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    node_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    node_type: Mapped[str] = mapped_column(String, default="")
+    content: Mapped[str] = mapped_column(Text, default="")
+    locked: Mapped[int] = mapped_column(Integer, default=0)
+    source: Mapped[str] = mapped_column(String, default="ai")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -1,5 +1,15 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.3
+
+- 新增章节人工保存链路：后端 [`POST /api/v1/novel/{novel_id}/chapter`](storyforge/interfaces/api/v1/novel.py) 可保存当前章节正文，前端 [`ChapterEditor`](storyforge/frontend/src/components/ChapterEditor.vue) 增加“保存章节”和未保存标记，人工编辑不再只停留在前端状态。
+- 新增节点草稿持久化模型 `node_drafts` 与接口：支持列出、编辑、保存、锁定节点草稿，AI 生成节点和半自动审阅通过的人工修改都会沉淀为节点级记录。
+- 创作台中间区新增“节点草稿”侧栏，可查看当前章节节点、编辑节点正文、保存节点、锁定/解锁节点，开始从抽卡式回滚转向节点级人工干预。
+- 新增小说资产持久化模型 `novel_assets` 与接口：共创构思中的核心灵感、主角欲望、世界规则、核心矛盾、期待钩子、爽点模型、角色关系会随作品保存，后续写作可复用。
+- 删除作品时同步清理章节、节点草稿、共创资产和守护进程状态，避免残留数据污染后续项目。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml)、FastAPI 版本与页面 `APP_VERSION` 均提升至 `0.4.3`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.4.2
 
 - 将新建作品入口从“一句话直出设定”调整为“共创构思”优先：新增 [`CocreationWizard`](storyforge/frontend/src/components/CocreationWizard.vue)，通过对话逐步沉淀核心灵感、主角欲望、世界规则、核心矛盾、期待钩子、爽点模型和角色关系。

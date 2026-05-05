@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from storyforge.infrastructure.persistence.database import SessionLocal, init_db
 from storyforge.infrastructure.persistence.models.daemon import DaemonStateModel
-from storyforge.infrastructure.persistence.models.novel import ChapterModel, NovelModel
+from storyforge.infrastructure.persistence.models.novel import ChapterModel, NodeDraftModel, NovelAssetModel, NovelModel
 
 
 STATUS_LABELS = {
@@ -95,6 +95,8 @@ def delete_novel(novel_id: str) -> bool:
             return False
         session.query(DaemonStateModel).filter(DaemonStateModel.novel_id == novel_id).delete()
         session.query(ChapterModel).filter(ChapterModel.novel_id == novel_id).delete()
+        session.query(NodeDraftModel).filter(NodeDraftModel.novel_id == novel_id).delete()
+        session.query(NovelAssetModel).filter(NovelAssetModel.novel_id == novel_id).delete()
         session.delete(novel)
         session.commit()
         return True
@@ -128,6 +130,60 @@ def save_chapter_text(novel_id: str, chapter_index: int, content: str, title: st
         session.commit()
 
 
+def list_node_drafts(novel_id: str) -> list[dict[str, Any]]:
+    init_db()
+    with SessionLocal() as session:
+        rows = session.query(NodeDraftModel).filter(NodeDraftModel.novel_id == novel_id).order_by(NodeDraftModel.chapter_index.asc(), NodeDraftModel.node_index.asc()).all()
+        return [_node_draft_from_model(row) for row in rows]
+
+
+def save_node_draft(novel_id: str, chapter_index: int, node_index: int, node_type: str, content: str, locked: bool = False, source: str = "manual") -> dict[str, Any]:
+    init_db()
+    draft_id = f"{novel_id}:chapter:{chapter_index}:node:{node_index}"
+    now = datetime.utcnow()
+    with SessionLocal() as session:
+        draft = session.get(NodeDraftModel, draft_id)
+        if draft is None:
+            draft = NodeDraftModel(id=draft_id, novel_id=novel_id, chapter_index=chapter_index, node_index=node_index, node_type=node_type, content=content, locked=1 if locked else 0, source=source, created_at=now, updated_at=now)
+            session.add(draft)
+        else:
+            draft.node_type = node_type or draft.node_type
+            draft.content = content
+            draft.locked = 1 if locked else 0
+            draft.source = source or draft.source
+            draft.updated_at = now
+        session.commit()
+        session.refresh(draft)
+        return _node_draft_from_model(draft)
+
+
+def upsert_novel_assets(novel_id: str, assets: dict[str, Any]) -> dict[str, str]:
+    init_db()
+    now = datetime.utcnow()
+    with SessionLocal() as session:
+        for key, value in assets.items():
+            text = str(value or "").strip()
+            if not text:
+                continue
+            asset_id = f"{novel_id}:asset:{key}"
+            row = session.get(NovelAssetModel, asset_id)
+            if row is None:
+                row = NovelAssetModel(id=asset_id, novel_id=novel_id, key=str(key), value=text, created_at=now, updated_at=now)
+                session.add(row)
+            else:
+                row.value = text
+                row.updated_at = now
+        session.commit()
+        return get_novel_assets(novel_id)
+
+
+def get_novel_assets(novel_id: str) -> dict[str, str]:
+    init_db()
+    with SessionLocal() as session:
+        rows = session.query(NovelAssetModel).filter(NovelAssetModel.novel_id == novel_id).order_by(NovelAssetModel.key.asc()).all()
+        return {row.key: row.value for row in rows}
+
+
 def _daemon_states_by_novel_id(session: Any) -> dict[str, dict[str, Any]]:
     rows = session.query(DaemonStateModel).all()
     return {row.novel_id: dict(row.state) for row in rows}
@@ -135,6 +191,20 @@ def _daemon_states_by_novel_id(session: Any) -> dict[str, dict[str, Any]]:
 
 def _chapters_for_novel(session: Any, novel_id: str) -> list[ChapterModel]:
     return session.query(ChapterModel).filter(ChapterModel.novel_id == novel_id).order_by(ChapterModel.index.asc()).all()
+
+
+def _node_draft_from_model(row: NodeDraftModel) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "novel_id": row.novel_id,
+        "chapter_index": row.chapter_index,
+        "node_index": row.node_index,
+        "node_type": row.node_type,
+        "content": row.content or "",
+        "locked": bool(row.locked),
+        "source": row.source,
+        "updated_at": _format_time(row.updated_at),
+    }
 
 
 def _merge_chapters_into_state(state: dict[str, Any] | None, chapters: list[ChapterModel]) -> dict[str, Any] | None:
@@ -188,6 +258,8 @@ def _detail_from_model(novel: NovelModel, state: dict[str, Any] | None = None) -
     }
     if state and state.get("chapter_texts"):
         detail["chapter_texts"] = state.get("chapter_texts")
+    detail["assets"] = get_novel_assets(novel.id)
+    detail["node_drafts"] = list_node_drafts(novel.id)
     return detail
 
 

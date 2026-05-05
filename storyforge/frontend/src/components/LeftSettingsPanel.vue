@@ -17,7 +17,7 @@ defineProps<{
     apiBaseUrl: string
     model: string
   }
-  semiAutoMode: boolean
+  fullAutoMode: boolean
   dissectSourceId: string
   editorChatInput: string
   editorChatMessages: CocreationMessage[]
@@ -30,7 +30,7 @@ defineProps<{
 const emit = defineEmits<{
   'update:collapsed': [value: boolean]
   'update:settingOpen': [value: boolean]
-  'update:semiAutoMode': [value: boolean]
+  'update:fullAutoMode': [value: boolean]
   'update:dissectSourceId': [value: string]
   'update:editorChatInput': [value: string]
   sendEditorChat: []
@@ -96,7 +96,7 @@ const emit = defineEmits<{
             <label class="text-zinc-500">目标字数<input v-model.number="writingForm.target_word_count" type="number" class="mt-1 w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-2 text-zinc-200" /></label>
             <label class="text-zinc-500">类型<input v-model="writingForm.genre" readonly class="mt-1 w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-2 text-zinc-300" /></label>
           </div>
-          <label class="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200"><input :checked="semiAutoMode" type="checkbox" @change="emit('update:semiAutoMode', ($event.target as HTMLInputElement).checked)" /> 半自动模式：每个节点生成后暂停审阅</label>
+          <label class="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200"><input :checked="fullAutoMode" type="checkbox" @change="emit('update:fullAutoMode', ($event.target as HTMLInputElement).checked)" /> 全自动模式：跳过节点审阅并直接写入正文</label>
           <details class="rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-xs text-zinc-500">
             <summary class="cursor-pointer text-zinc-300">高级配置</summary>
             <div class="mt-3 space-y-2">

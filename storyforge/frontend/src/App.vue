@@ -15,7 +15,7 @@ import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, EditorSkill, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.8'
+const APP_VERSION = '0.4.9'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -62,7 +62,7 @@ const leftCollapsed = ref(false)
 const rightCollapsed = ref(false)
 const settingOpen = ref(true)
 const activeRightTab = ref<RightTab>('检测')
-const semiAutoMode = ref(false)
+const fullAutoMode = ref(false)
 const reviewEditContent = ref('')
 const reviewInstructions = ref('')
 const generationLogic = ref<string[]>([])
@@ -279,11 +279,13 @@ function applyEvent(event: SseEvent) {
       syncChaptersFromState(event.state)
     }
   }
-  if (event.type === 'node_generated' && event.data?.content && (!selectedNovelId.value || event.state?.novel_id === selectedNovelId.value)) {
+  if ((event.type === 'node_draft_generated' || event.type === 'node_generated') && event.data?.content && (!selectedNovelId.value || event.state?.novel_id === selectedNovelId.value)) {
     const index = Math.max(0, (Number(event.data.chapter_index) || 1) - 1)
     while (chapters.value.length <= index) chapters.value.push({ title: `第 ${chapters.value.length + 1} 章`, content: '', nodeLabel: '写作中', nodesDone: 0, nodesTotal: 7 })
-    chapters.value[index].content += `${chapters.value[index].content ? '\n\n' : ''}${String(event.data.content)}`
-    chapters.value[index].dirty = false
+    if (event.type === 'node_generated' && event.data.reviewed) {
+      chapters.value[index].content += `${chapters.value[index].content ? '\n\n' : ''}${String(event.data.content)}`
+      chapters.value[index].dirty = false
+    }
     upsertNodeDraft({
       id: `${event.state?.novel_id || selectedNovelId.value}:chapter:${index + 1}:node:${Number(event.data.node_index) || 1}`,
       chapter_index: index + 1,
@@ -456,9 +458,10 @@ async function sendEditorChat() {
     editorChatMessages.value.push(assistantMessage)
     await api.appendEditorChat(selectedNovel.value.id, { messages: [userMessage, assistantMessage] })
     if (Object.keys(turn.asset_patch || {}).length) {
+      const changedExisting = Object.keys(turn.asset_patch).some((key) => selectedNovel.value?.assets?.[key] && selectedNovel.value.assets[key] !== turn.asset_patch[key])
       const result = await api.saveAssets(selectedNovel.value.id, { assets: turn.asset_patch })
       selectedNovel.value = { ...selectedNovel.value, assets: result.assets }
-      appNotice.value = 'AI 编辑已把本轮确认内容写入作品资产。'
+      appNotice.value = changedExisting ? 'AI 编辑已根据新思路修正作品资产。' : 'AI 编辑已把本轮确认内容写入作品资产。'
     }
   } catch (error) {
     appNotice.value = `创作对话失败：${String(error)}`
@@ -546,7 +549,7 @@ async function startWriting() {
       api_key: writingForm.apiKey,
       api_base_url: writingForm.apiBaseUrl,
       model: writingForm.model,
-      semi_auto: semiAutoMode.value,
+      semi_auto: !fullAutoMode.value,
     })
     appNotice.value = `守护进程已启动：${result.novel_id}`
     await refreshStatus(selectedNovel.value.id)
@@ -576,9 +579,10 @@ async function resumeWriting() {
 async function submitReviewDecision(action: 'approve' | 'rewrite' | 'rollback') {
   try {
     const payload = { content: reviewEditContent.value, instructions: reviewInstructions.value }
-    if (action === 'approve') await api.approveNode(payload)
-    if (action === 'rewrite') await api.rewriteNode(payload)
-    if (action === 'rollback') await api.rollbackNode({ instructions: reviewInstructions.value })
+    const payloadWithNovel = { ...payload, novel_id: selectedNovelId.value }
+    if (action === 'approve') await api.approveNode(payloadWithNovel)
+    if (action === 'rewrite') await api.rewriteNode(payloadWithNovel)
+    if (action === 'rollback') await api.rollbackNode({ novel_id: selectedNovelId.value, instructions: reviewInstructions.value })
     appNotice.value = action === 'approve' ? '审阅已通过，内容已同步。' : action === 'rewrite' ? '已按当前编辑内容提交重写/替换。' : '已回滚该节点。'
     reviewEditContent.value = ''
     reviewInstructions.value = ''
@@ -702,7 +706,7 @@ onMounted(async () => {
         <LeftSettingsPanel
           v-model:collapsed="leftCollapsed"
           v-model:setting-open="settingOpen"
-          v-model:semi-auto-mode="semiAutoMode"
+          v-model:full-auto-mode="fullAutoMode"
           v-model:dissect-source-id="dissectSourceId"
           v-model:editor-chat-input="editorChatInput"
           :selected-novel="selectedNovel"

@@ -22,7 +22,7 @@ def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets
     guidance = select_writing_guidance(current, "期待感", "爽点", "结构", limit=2, max_chars=900)
     editor_skills = get_editor_skills(skill_ids or [], max_chars=3600)
     user_last = _last_user_message(messages) or logline
-    prompt = f"""你是 StoryForge 的共创编辑。不要一次性替作者生成完整设定，而是像对话框一样逐步追问、归纳和沉淀小说资产。
+    prompt = f"""你是 StoryForge 的共创编辑。不要一次性替作者生成完整设定，而是像对话框一样逐步追问、归纳、修正和沉淀小说资产。
 
 原始灵感：{logline}
 当前已确认资产：{assets}
@@ -49,7 +49,7 @@ def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets
 
 要求：
 1. 不要替作者拍板大量内容。
-2. 能从用户话里确认的资产才写入 asset_patch。
+2. 能从用户话里确认的资产才写入 asset_patch。asset_patch 既可以补空字段，也可以覆盖已有字段；如果用户后续思路改变、否定、扩展或重构了前面资产，必须写入新的字段值来修正旧资产。
 2.5 如果 writing_context 有当前章节、当前节点、检测结果，请优先针对作者正在写的文本给建议。
 2.6 如果作者明确要求“改一下/替换/补一段/写入/应用/加强爽点/加钩子”等，必须给 edit_patch。target 优先 node，其次 chapter。不要只给建议。
 3. 如果七个字段已经基本完整，ready_for_writing 可以为 true。
@@ -70,7 +70,7 @@ def _local_turn(*, logline: str, assets: dict[str, Any], current: str, user_last
         patch[current] = user_last[:500]
     question = next((desc for name, desc in STAGE_FIELDS if name == current), "现在可以把这些资产转入节点写作。")
     return {
-        "reply": f"我先把这一轮理解为“{current}”方向。{question} 你可以继续补一句：这件事最吸引读者的地方是什么？",
+        "reply": f"我先把这一轮理解为“{current}”方向。{question} 如果这会改变前面已经确认的资产，我会直接把旧资产修正掉。",
         "asset_patch": patch,
         "next_focus": current,
         "ready_for_writing": current == "写作入口",

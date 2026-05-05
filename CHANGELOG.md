@@ -1,5 +1,17 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.9
+
+- 修复原有整章/小说流程与新增节点写作流程双线并行的问题：节点生成先作为 `node_draft_generated` 草稿进入节点池，不再直接追加到中间章节正文。
+- 守护进程只有在节点通过审阅后才广播 `node_generated`，前端收到已审阅节点后才追加到章节正文，避免“未审阅内容自动进正文”。
+- 写作启动默认进入节点审阅流程，原“半自动模式”反转为“全自动模式”开关；未勾选时常态为逐节点审阅，勾选才跳过审阅直接写入。
+- 审阅接口调用补充 `novel_id`，避免多作品/多守护进程情况下审阅请求落到错误实例或最新实例。
+- 右侧审阅文案从“半自动审阅”改为“节点审阅”，符合半自动作为默认常态的新工作流。
+- 共创资产沉淀 prompt 明确允许并要求修正已有资产：当后续思路改变、否定、扩展或重构前面内容时，AI 会通过 `asset_patch` 覆盖旧字段，而不是只补空字段。
+- 左侧 AI 写入资产时会识别是否修改了已有字段，并提示“根据新思路修正作品资产”。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml)、FastAPI 版本与页面 `APP_VERSION` 均提升至 `0.4.9`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.4.8
 
 - 新增内置编辑 Skill 注册表 [`storyforge/knowledge/editor_skills`](storyforge/knowledge/editor_skills)，首批提供“职业网文编辑”和“情绪钩子设计师”两类专业提示词技能。

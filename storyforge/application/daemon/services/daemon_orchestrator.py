@@ -278,9 +278,9 @@ class DaemonOrchestrator:
                 filled = filled.model_copy(update={"content": str(locked_override.get("content") or filled.content or "")})
                 self._notify("locked_node_applied", {"chapter_index": chapter_index, "node_index": filled.index, "node_type": filled.node_type})
             else:
-                save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai")
+                save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai_draft")
             self._notify(
-                "node_generated",
+                "node_draft_generated",
                 {
                     "chapter_index": chapter_index,
                     "node_index": filled.index,
@@ -293,6 +293,16 @@ class DaemonOrchestrator:
             if filled is None:
                 continue
             generated_nodes.append(filled)
+            self._notify(
+                "node_generated",
+                {
+                    "chapter_index": chapter_index,
+                    "node_index": filled.index,
+                    "node_type": filled.node_type,
+                    "content": filled.content,
+                    "reviewed": True,
+                },
+            )
 
         consistency = check_node_consistency(generated_nodes)
         outline_check = check_chapter_outline(generated_nodes)

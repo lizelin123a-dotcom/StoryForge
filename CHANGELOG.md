@@ -1,5 +1,15 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.4
+
+- `build_governed_context` 接入持久化共创资产 `novel_assets` 和已锁定节点 `locked_nodes`，将作者确认过的作品骨架与人工节点作为高优先级上下文。
+- 守护进程启动时会加载作品资产与锁定节点；节点生成前会检查同章同序号锁定节点，若存在则直接采用人工锁定内容并发出 `locked_node_applied` 事件，避免 AI 覆盖作者确认内容。
+- 保存节点时支持 `sync_chapter`，人工编辑或锁定节点后可按节点草稿重建当前章节正文，并同步章节、字数与 daemon state。
+- 共创资产在左侧设定区展示，方便写作时随时查看核心灵感、主角欲望、世界规则、核心矛盾、期待钩子、爽点模型和角色关系。
+- 上下文约束新增明确规则：共创资产优先级高于临时生成想法，锁定节点必须承接、不得覆盖、否定或重写。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml)、FastAPI 版本与页面 `APP_VERSION` 均提升至 `0.4.4`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.4.3
 
 - 新增章节人工保存链路：后端 [`POST /api/v1/novel/{novel_id}/chapter`](storyforge/interfaces/api/v1/novel.py) 可保存当前章节正文，前端 [`ChapterEditor`](storyforge/frontend/src/components/ChapterEditor.vue) 增加“保存章节”和未保存标记，人工编辑不再只停留在前端状态。

@@ -20,7 +20,7 @@ from storyforge.domain.dissect.dissected_chapter import DissectedChapter
 from storyforge.domain.node.node import ChapterNode
 from storyforge.infrastructure.ai.openai_adapter import call_llm
 from storyforge.infrastructure.persistence.daemon_state_repository import save_daemon_state
-from storyforge.infrastructure.persistence.novel_repository import save_chapter_text, save_node_draft
+from storyforge.infrastructure.persistence.novel_repository import get_novel_assets, list_node_drafts, save_chapter_text, save_node_draft
 
 Listener = Callable[[dict[str, Any]], None]
 
@@ -113,6 +113,8 @@ class DaemonOrchestrator:
                 "runtime_memory": state.get("runtime_memory") or {"chapter_summaries": [], "hooks": [], "facts": []},
                 "runtime_state_deltas": state.get("runtime_state_deltas") or [],
                 "hook_health_records": state.get("hook_health_records") or [],
+                "novel_assets": state.get("novel_assets") or get_novel_assets(novel_id),
+                "locked_nodes": state.get("locked_nodes") or list_node_drafts(novel_id, locked_only=True),
             }
         )
         return state
@@ -262,6 +264,8 @@ class DaemonOrchestrator:
                 baseline_texts=self.state["baseline_texts"],
                 foreshadowing_ledger=self.state["foreshadowing_ledger"],
                 manual_instructions=self.state.get("manual_review", {}).get("instructions", ""),
+                novel_assets=self.state.get("novel_assets") or get_novel_assets(self.state["novel_id"]),
+                locked_nodes=self.state.get("locked_nodes") or list_node_drafts(self.state["novel_id"], locked_only=True),
             )
             questions = answer_four_questions(node, context, llm=llm)
             if getattr(questions, "_fallback_reason", ""):
@@ -269,7 +273,12 @@ class DaemonOrchestrator:
             filled = generate_node_content(node, context, questions, llm=llm)
             if filled.content and "【本地写作教学规则生成】" in filled.content:
                 self._notify("llm_fallback_used", {"stage": "node_content", "reason": "node generation failed; local writing rules used"})
-            save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai")
+            locked_override = self._get_locked_node(chapter_index, filled.index)
+            if locked_override:
+                filled = filled.model_copy(update={"content": str(locked_override.get("content") or filled.content or "")})
+                self._notify("locked_node_applied", {"chapter_index": chapter_index, "node_index": filled.index, "node_type": filled.node_type})
+            else:
+                save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai")
             self._notify(
                 "node_generated",
                 {
@@ -315,6 +324,14 @@ class DaemonOrchestrator:
         self._notify("chapter_reviewed", {"chapter_index": chapter_index, "review_data": review_data})
         self._notify("writing_progress", self.get_progress())
         return {"chapter_index": chapter_index, "review_data": review_data, "quality_score": quality_score}
+
+    def _get_locked_node(self, chapter_index: int, node_index: int) -> dict[str, Any] | None:
+        locked_nodes = self.state.get("locked_nodes") or list_node_drafts(self.state["novel_id"], locked_only=True)
+        self.state["locked_nodes"] = locked_nodes
+        for node in locked_nodes:
+            if int(node.get("chapter_index") or 0) == chapter_index and int(node.get("node_index") or 0) == node_index and node.get("locked"):
+                return node
+        return None
 
     def _commit_chapter(self, chapter_index: int, chapter_text: str, review_data: dict[str, Any], conflict_data: dict[str, Any]) -> None:
         self.state["chapter_texts"].append(chapter_text)

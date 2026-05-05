@@ -50,6 +50,12 @@ const emit = defineEmits<{
             <label class="block text-xs text-zinc-500">世界观<textarea v-model="writingForm.world_setting" rows="4" readonly class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-300" /></label>
             <label class="block text-xs text-zinc-500">人物设定<textarea v-model="writingForm.characters" rows="5" readonly class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-300" /></label>
             <label class="block text-xs text-zinc-500">类型<input v-model="writingForm.genre" readonly class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-300" /></label>
+            <div v-if="selectedNovel?.assets && Object.keys(selectedNovel.assets).length" class="rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-3">
+              <div class="mb-2 text-xs font-medium text-indigo-200">共创资产</div>
+              <div class="space-y-2 text-xs leading-6 text-zinc-300">
+                <p v-for="(value, key) in selectedNovel.assets" :key="key"><span class="text-zinc-500">{{ key }}：</span>{{ value }}</p>
+              </div>
+            </div>
             <label class="block text-xs text-zinc-500">目标字数<input v-model.number="writingForm.target_word_count" type="number" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-200" /></label>
             <label class="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200"><input :checked="semiAutoMode" type="checkbox" @change="emit('update:semiAutoMode', ($event.target as HTMLInputElement).checked)" /> 半自动模式：每个节点生成后暂停审阅</label>
             <label class="block text-xs text-zinc-500">API Key<input v-model="writingForm.apiKey" type="password" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-200" /></label>

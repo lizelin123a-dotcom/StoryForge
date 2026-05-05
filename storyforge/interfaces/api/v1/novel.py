@@ -45,6 +45,7 @@ class NodeDraftSaveRequest(BaseModel):
     content: str = ""
     locked: bool = False
     source: str = "manual"
+    sync_chapter: bool = False
 
 
 class NovelAssetsSaveRequest(BaseModel):
@@ -105,7 +106,7 @@ def novel_nodes(novel_id: str) -> dict[str, Any]:
 def novel_save_node(novel_id: str, request: NodeDraftSaveRequest) -> dict[str, Any]:
     if get_novel(novel_id) is None:
         raise HTTPException(status_code=404, detail="novel not found")
-    return save_node_draft(novel_id, request.chapter_index, request.node_index, request.node_type, request.content, request.locked, request.source)
+    return save_node_draft(novel_id, request.chapter_index, request.node_index, request.node_type, request.content, request.locked, request.source, request.sync_chapter)
 
 
 @router.post("/api/v1/novel/{novel_id}/assets")

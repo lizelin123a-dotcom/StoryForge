@@ -127,17 +127,35 @@ def save_chapter_text(novel_id: str, chapter_index: int, content: str, title: st
         if novel is not None:
             novel.word_count = sum(row.word_count or 0 for row in session.query(ChapterModel).filter(ChapterModel.novel_id == novel_id).all())
             novel.updated_at = now
+        state_row = session.get(DaemonStateModel, novel_id)
+        if state_row is not None:
+            state = dict(state_row.state or {})
+            chapter_texts = list(state.get("chapter_texts") or [])
+            while len(chapter_texts) < chapter_index:
+                chapter_texts.append("")
+            chapter_texts[chapter_index - 1] = content
+            state["chapter_texts"] = chapter_texts
+            state["baseline_texts"] = chapter_texts
+            progress = dict(state.get("progress") or {})
+            progress["written_chapters"] = max(int(progress.get("written_chapters") or 0), chapter_index)
+            progress["total_words"] = sum(len(str(text or "")) for text in chapter_texts)
+            state["progress"] = progress
+            state_row.state = state
+            state_row.updated_at = now
         session.commit()
 
 
-def list_node_drafts(novel_id: str) -> list[dict[str, Any]]:
+def list_node_drafts(novel_id: str, locked_only: bool = False) -> list[dict[str, Any]]:
     init_db()
     with SessionLocal() as session:
-        rows = session.query(NodeDraftModel).filter(NodeDraftModel.novel_id == novel_id).order_by(NodeDraftModel.chapter_index.asc(), NodeDraftModel.node_index.asc()).all()
+        query = session.query(NodeDraftModel).filter(NodeDraftModel.novel_id == novel_id)
+        if locked_only:
+            query = query.filter(NodeDraftModel.locked == 1)
+        rows = query.order_by(NodeDraftModel.chapter_index.asc(), NodeDraftModel.node_index.asc()).all()
         return [_node_draft_from_model(row) for row in rows]
 
 
-def save_node_draft(novel_id: str, chapter_index: int, node_index: int, node_type: str, content: str, locked: bool = False, source: str = "manual") -> dict[str, Any]:
+def save_node_draft(novel_id: str, chapter_index: int, node_index: int, node_type: str, content: str, locked: bool = False, source: str = "manual", sync_chapter: bool = False) -> dict[str, Any]:
     init_db()
     draft_id = f"{novel_id}:chapter:{chapter_index}:node:{node_index}"
     now = datetime.utcnow()
@@ -152,9 +170,40 @@ def save_node_draft(novel_id: str, chapter_index: int, node_index: int, node_typ
             draft.locked = 1 if locked else 0
             draft.source = source or draft.source
             draft.updated_at = now
+        if sync_chapter:
+            _rebuild_chapter_from_nodes(session, novel_id, chapter_index)
+        state_row = session.get(DaemonStateModel, novel_id)
+        if state_row is not None:
+            state = dict(state_row.state or {})
+            locked_nodes = [item for item in list_node_drafts(novel_id, locked_only=True) if item.get("id") != draft_id]
+            if locked:
+                locked_nodes.append(_node_draft_from_model(draft))
+            state["locked_nodes"] = locked_nodes
+            state_row.state = state
+            state_row.updated_at = now
         session.commit()
         session.refresh(draft)
         return _node_draft_from_model(draft)
+
+
+def _rebuild_chapter_from_nodes(session: Any, novel_id: str, chapter_index: int) -> None:
+    rows = session.query(NodeDraftModel).filter(NodeDraftModel.novel_id == novel_id, NodeDraftModel.chapter_index == chapter_index).order_by(NodeDraftModel.node_index.asc()).all()
+    if not rows:
+        return
+    content = "\n\n".join(row.content or "" for row in rows if row.content)
+    if not content:
+        return
+    chapter_id = f"{novel_id}:chapter:{chapter_index}"
+    now = datetime.utcnow()
+    chapter = session.get(ChapterModel, chapter_id)
+    if chapter is None:
+        session.add(ChapterModel(id=chapter_id, novel_id=novel_id, volume_id=None, index=chapter_index, title=f"第 {chapter_index} 章", content=content, word_count=len(content)))
+    else:
+        chapter.content = content
+        chapter.word_count = len(content)
+    novel = session.get(NovelModel, novel_id)
+    if novel is not None:
+        novel.updated_at = now
 
 
 def upsert_novel_assets(novel_id: str, assets: dict[str, Any]) -> dict[str, str]:
@@ -173,6 +222,12 @@ def upsert_novel_assets(novel_id: str, assets: dict[str, Any]) -> dict[str, str]
             else:
                 row.value = text
                 row.updated_at = now
+        state_row = session.get(DaemonStateModel, novel_id)
+        if state_row is not None:
+            state = dict(state_row.state or {})
+            state["novel_assets"] = get_novel_assets(novel_id)
+            state_row.state = state
+            state_row.updated_at = now
         session.commit()
         return get_novel_assets(novel_id)
 

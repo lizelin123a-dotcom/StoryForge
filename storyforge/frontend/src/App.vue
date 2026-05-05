@@ -15,7 +15,7 @@ import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, CocreationMessage, CocreationTurn, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.3'
+const APP_VERSION = '0.4.4'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -323,7 +323,7 @@ async function saveCurrentChapter() {
 async function saveCurrentNode() {
   if (!selectedNovelId.value || !selectedNode.value) return
   try {
-    const saved = await api.saveNode(selectedNovelId.value, { ...selectedNode.value, content: currentNodeText.value, source: 'manual' }) as unknown as NodeDraft
+    const saved = await api.saveNode(selectedNovelId.value, { ...selectedNode.value, content: currentNodeText.value, source: 'manual', sync_chapter: true }) as unknown as NodeDraft
     upsertNodeDraft(saved)
     appNotice.value = '节点已保存。'
   } catch (error) {
@@ -333,7 +333,7 @@ async function saveCurrentNode() {
 
 async function toggleNodeLock(node: NodeDraft) {
   if (!selectedNovelId.value) return
-  const saved = await api.saveNode(selectedNovelId.value, { ...node, locked: !node.locked, source: node.source || 'manual' }) as unknown as NodeDraft
+  const saved = await api.saveNode(selectedNovelId.value, { ...node, locked: !node.locked, source: node.source || 'manual', sync_chapter: true }) as unknown as NodeDraft
   upsertNodeDraft(saved)
 }
 

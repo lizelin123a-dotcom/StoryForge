@@ -40,6 +40,8 @@ def build_governed_context(
     baseline_texts: list[str],
     foreshadowing_ledger: dict[str, Any],
     manual_instructions: str = "",
+    novel_assets: dict[str, Any] | None = None,
+    locked_nodes: list[dict[str, Any]] | None = None,
     max_summaries: int = 5,
     max_baselines: int = 3,
 ) -> dict[str, Any]:
@@ -48,8 +50,12 @@ def build_governed_context(
     recent_baselines = [text for text in baseline_texts[-max_baselines:] if text]
     active_hooks = _select_active_hooks(foreshadowing_ledger, chapter_index)
     writing_guidance = select_writing_guidance("结构", "期待感", "爽点", "角色", "冲突", limit=4)
+    assets = novel_assets or {}
+    locked = _select_locked_nodes(locked_nodes or [], chapter_index)
     entries = [
         ContextEntry("story_bible", "故事圣经", story_bible, 100),
+        ContextEntry("novel_assets", "共创资产", assets, 98),
+        ContextEntry("locked_nodes", "已锁定节点", locked, 97),
         ContextEntry("writing_guidance", "写作教学规则", writing_guidance, 95),
         ContextEntry("chapter_summaries", "近章摘要", recent_summaries, 80),
         ContextEntry("baseline_texts", "近章文风样本", recent_baselines, 60),
@@ -59,7 +65,9 @@ def build_governed_context(
         "只使用 selected_context 中与当前节点相关的信息，避免把长期设定一次性灌入正文。",
         "优先延续近三章的叙事视角、节奏和角色状态。",
         "伏笔只推进或回收 hook_agenda 中的条目，不随意新增无关大坑。",
-        "优先遵循 writing_guidance 中的写作教学规则：期待感、爽点、结构、冲突和角色行动必须落到具体剧情。"
+        "优先遵循 writing_guidance 中的写作教学规则：期待感、爽点、结构、冲突和角色行动必须落到具体剧情。",
+        "novel_assets 是作者在共创阶段确认的作品骨架，优先级高于临时生成想法。",
+        "locked_nodes 是作者人工确认或锁定的节点，后续生成必须承接，不得覆盖、否定或重写。"
     ]
     if manual_instructions.strip():
         constraints.append(f"人工审阅指令优先：{manual_instructions.strip()}")
@@ -80,6 +88,8 @@ def build_governed_context(
         "hook_agenda": active_hooks,
         "constraints": constraints,
         "writing_guidance": writing_guidance,
+        "novel_assets": assets,
+        "locked_nodes": locked,
     }
 
 
@@ -130,6 +140,23 @@ def evaluate_hook_health(foreshadowing_ledger: dict[str, Any], chapter_index: in
         if age >= 8:
             issues.append({"severity": "warning", "description": str(hook.get("description", "未命名伏笔")), "suggestion": "该伏笔悬挂过久，建议在后续 1-3 章推进或回收。"})
     return issues
+
+
+def _select_locked_nodes(nodes: list[dict[str, Any]], chapter_index: int, limit: int = 8) -> list[dict[str, Any]]:
+    selected = []
+    for node in nodes:
+        if not isinstance(node, dict) or not node.get("locked"):
+            continue
+        node_chapter = int(node.get("chapter_index") or 0)
+        if node_chapter <= chapter_index:
+            selected.append({
+                "chapter_index": node_chapter,
+                "node_index": int(node.get("node_index") or 0),
+                "node_type": str(node.get("node_type") or ""),
+                "content": str(node.get("content") or "")[:900],
+                "source": str(node.get("source") or "manual"),
+            })
+    return sorted(selected, key=lambda item: (item["chapter_index"], item["node_index"]), reverse=True)[:limit]
 
 
 def _select_active_hooks(ledger: dict[str, Any], chapter_index: int, limit: int = 6) -> list[dict[str, Any]]:

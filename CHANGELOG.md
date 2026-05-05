@@ -1,5 +1,13 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.3.5
+
+- 拆分创作台左侧设定区，新增 [`LeftSettingsPanel`](storyforge/frontend/src/components/LeftSettingsPanel.vue)。
+- `LeftSettingsPanel` 封装作品状态、设定区折叠、世界观/人物/类型/目标字数、半自动模式、LLM 配置、对标拆解引用与启动/暂停/继续/导出按钮。
+- `App.vue` 移除左侧设定面板大段模板，创作台仅保留页面布局和状态编排，下一步可继续拆分章节编辑区。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml) 与页面 `APP_VERSION` 均提升至 `0.3.5`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.3.4
 
 - 拆分创作台右侧监控区，新增 [`RightMonitorPanel`](storyforge/frontend/src/components/RightMonitorPanel.vue)。

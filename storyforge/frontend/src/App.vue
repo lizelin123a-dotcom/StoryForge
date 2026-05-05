@@ -6,13 +6,14 @@ import AppSidebar from './components/AppSidebar.vue'
 import BookcasePage from './components/BookcasePage.vue'
 import ConfigPage from './components/ConfigPage.vue'
 import DissectPage from './components/DissectPage.vue'
+import LeftSettingsPanel from './components/LeftSettingsPanel.vue'
 import NoticeToast from './components/NoticeToast.vue'
 import NovelWizard from './components/NovelWizard.vue'
 import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, RightTab, RouteName, StepState } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.3.4'
+const APP_VERSION = '0.3.5'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -437,29 +438,20 @@ onMounted(async () => {
       <BookcasePage v-if="route === 'bookcase'" :novels="novels" @create="wizardOpen = true" @load="loadNovel" />
 
       <section v-else-if="route === 'edit'" class="flex h-screen overflow-hidden">
-        <aside class="border-r border-[#2a2a2a] bg-[#141414] transition-all duration-150" :class="leftCollapsed ? 'w-12' : 'w-[320px]'">
-          <button v-if="leftCollapsed" class="h-full w-12 text-zinc-500 hover:bg-[#1a1a1a] hover:text-white" @click="leftCollapsed = false">›</button>
-          <div v-else class="flex h-full flex-col p-4">
-            <div class="mb-4 flex items-start justify-between gap-3"><div><h1 class="text-xl font-semibold tracking-tight text-white">{{ selectedNovel?.title || '未选择作品' }}</h1><span class="mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs" :class="stateTone">{{ stateLabel }}</span></div><button class="rounded-lg border border-[#2a2a2a] px-2 text-zinc-500 hover:bg-[#1a1a1a] hover:text-white" @click="leftCollapsed = true">‹</button></div>
-            <div class="overflow-y-auto pr-1">
-              <section class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] shadow-lg shadow-black/20">
-                <button class="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-white" @click="settingOpen = !settingOpen">设定区 <span class="text-zinc-500">{{ settingOpen ? '−' : '+' }}</span></button>
-                <div v-if="settingOpen" class="space-y-3 border-t border-[#2a2a2a] p-4">
-                  <label class="block text-xs text-zinc-500">世界观<textarea v-model="writingForm.world_setting" rows="4" readonly class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-300" /></label>
-                  <label class="block text-xs text-zinc-500">人物设定<textarea v-model="writingForm.characters" rows="5" readonly class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-300" /></label>
-                  <label class="block text-xs text-zinc-500">类型<input v-model="writingForm.genre" readonly class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-300" /></label>
-                  <label class="block text-xs text-zinc-500">目标字数<input v-model.number="writingForm.target_word_count" type="number" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-200" /></label>
-                  <label class="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200"><input v-model="semiAutoMode" type="checkbox" /> 半自动模式：每个节点生成后暂停审阅</label>
-                  <label class="block text-xs text-zinc-500">API Key<input v-model="writingForm.apiKey" type="password" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-200" /></label>
-                  <label class="block text-xs text-zinc-500">LLM API Base URL<input v-model="writingForm.apiBaseUrl" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-200" /></label>
-                  <label class="block text-xs text-zinc-500">模型选择<input v-model="writingForm.model" class="mt-1 w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-200" /></label>
-                </div>
-              </section>
-              <section class="mt-4 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 shadow-lg shadow-black/20"><h2 class="mb-3 text-sm font-medium text-white">对标拆解引用</h2><input v-model="dissectSourceId" placeholder="可选：拆解素材 ID" class="w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm text-zinc-200" /></section>
-            </div>
-            <div class="mt-auto grid grid-cols-2 gap-2 pt-4"><button class="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-medium text-emerald-950 hover:bg-emerald-400" @click="startWriting">▶ 启动写作</button><button class="rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-amber-950 hover:bg-amber-400" @click="pauseWriting">⏸ 暂停</button><button class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500" @click="resumeWriting">▶ 继续</button><button class="rounded-xl bg-zinc-700 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-600" @click="exportText">📥 导出文本</button></div>
-          </div>
-        </aside>
+        <LeftSettingsPanel
+          v-model:collapsed="leftCollapsed"
+          v-model:setting-open="settingOpen"
+          v-model:semi-auto-mode="semiAutoMode"
+          v-model:dissect-source-id="dissectSourceId"
+          :selected-novel="selectedNovel"
+          :state-tone="stateTone"
+          :state-label="stateLabel"
+          :writing-form="writingForm"
+          @start-writing="startWriting"
+          @pause-writing="pauseWriting"
+          @resume-writing="resumeWriting"
+          @export-text="exportText"
+        />
         <section class="flex min-w-[400px] flex-1 flex-col bg-[#0f0f0f]">
           <div class="border-b border-[#2a2a2a] bg-[#141414]/80 px-5 py-3"><div v-if="chapters.length" class="flex gap-2 overflow-x-auto pb-1"><button v-for="(chapter, index) in chapters" :key="chapter.title" class="shrink-0 rounded-full border px-4 py-1.5 text-sm" :class="activeChapter === index ? 'border-indigo-500/50 bg-indigo-500/20 text-white' : 'border-[#2a2a2a] bg-[#1a1a1a] text-zinc-400 hover:text-white'" @click="activeChapter = index">{{ chapter.title }}</button></div><p v-else class="text-sm text-zinc-500">尚未开始写作</p></div>
           <div class="flex-1 overflow-y-auto p-6"><textarea v-if="chapters.length" v-model="currentChapterText" class="min-h-full w-full resize-none rounded-2xl border border-[#2a2a2a] bg-[#151515] p-6 font-mono text-[15px] leading-8 text-zinc-200 shadow-2xl shadow-black/20" /><div v-else class="flex h-full items-center justify-center rounded-2xl border border-dashed border-[#3a3a3a] bg-[#151515] text-zinc-500">尚未开始写作，点击左侧“启动写作”后会自动加载持久化章节。</div></div>

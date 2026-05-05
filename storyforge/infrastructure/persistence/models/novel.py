@@ -56,6 +56,17 @@ class ChapterModel(Base):
     word_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class EditorChatMessageModel(Base):
+    __tablename__ = "editor_chat_messages"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    novel_id: Mapped[str] = mapped_column(String, ForeignKey("novels.id"), nullable=False)
+    index: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str] = mapped_column(String, nullable=False)
+    content: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class NodeDraftModel(Base):
     __tablename__ = "node_drafts"
 

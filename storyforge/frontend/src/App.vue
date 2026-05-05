@@ -15,7 +15,7 @@ import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, CocreationMessage, CocreationTurn, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.5'
+const APP_VERSION = '0.4.6'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -201,6 +201,7 @@ async function loadNovel(id: string) {
     writingForm.genre = novel.genre || ''
     writingForm.target_word_count = Number(novel.target_word_count || 120000)
     nodeDrafts.value = normalizeNodeDrafts(novel.node_drafts || [])
+    editorChatMessages.value = normalizeChatMessages(novel.editor_chat_messages || [])
     if (novel.chapter_texts?.length) {
       syncChaptersFromTexts(novel.chapter_texts)
     }
@@ -210,6 +211,13 @@ async function loadNovel(id: string) {
     appNotice.value = `作品加载失败：${String(error)}`
     go('bookcase')
   }
+}
+
+function normalizeChatMessages(rows: unknown[]): CocreationMessage[] {
+  return rows.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object').map((row): CocreationMessage => ({
+    role: String(row.role || 'user') === 'assistant' ? 'assistant' : 'user',
+    content: String(row.content || ''),
+  })).filter((message) => message.content.trim())
 }
 
 function normalizeNodeDrafts(rows: unknown[]): NodeDraft[] {
@@ -408,12 +416,20 @@ async function sendEditorChat() {
       logline: selectedNovel.value.title,
       messages: editorChatMessages.value,
       assets: selectedNovel.value.assets || {},
+      writing_context: {
+        chapter_index: currentChapterIndex.value,
+        chapter_text: currentChapterText.value.slice(-2400),
+        selected_node: selectedNode.value,
+        writing_analysis: writingAnalysis.value,
+      },
       api_key: writingForm.apiKey,
       api_base_url: writingForm.apiBaseUrl,
       model: writingForm.model,
     }) as unknown as CocreationTurn
     editorChatLastTurn.value = turn
-    editorChatMessages.value.push({ role: 'assistant', content: turn.reply })
+    const assistantMessage: CocreationMessage = { role: 'assistant', content: turn.reply }
+    editorChatMessages.value.push(assistantMessage)
+    await api.appendEditorChat(selectedNovel.value.id, { messages: [userMessage, assistantMessage] })
     if (Object.keys(turn.asset_patch || {}).length) {
       const result = await api.saveAssets(selectedNovel.value.id, { assets: turn.asset_patch })
       selectedNovel.value = { ...selectedNovel.value, assets: result.assets }

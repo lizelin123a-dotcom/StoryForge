@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from storyforge.infrastructure.persistence.database import SessionLocal, init_db
 from storyforge.infrastructure.persistence.models.daemon import DaemonStateModel
-from storyforge.infrastructure.persistence.models.novel import ChapterModel, NodeDraftModel, NovelAssetModel, NovelModel
+from storyforge.infrastructure.persistence.models.novel import ChapterModel, EditorChatMessageModel, NodeDraftModel, NovelAssetModel, NovelModel
 
 
 STATUS_LABELS = {
@@ -97,6 +97,7 @@ def delete_novel(novel_id: str) -> bool:
         session.query(ChapterModel).filter(ChapterModel.novel_id == novel_id).delete()
         session.query(NodeDraftModel).filter(NodeDraftModel.novel_id == novel_id).delete()
         session.query(NovelAssetModel).filter(NovelAssetModel.novel_id == novel_id).delete()
+        session.query(EditorChatMessageModel).filter(EditorChatMessageModel.novel_id == novel_id).delete()
         session.delete(novel)
         session.commit()
         return True
@@ -184,6 +185,29 @@ def save_node_draft(novel_id: str, chapter_index: int, node_index: int, node_typ
         session.commit()
         session.refresh(draft)
         return _node_draft_from_model(draft)
+
+
+def list_editor_chat_messages(novel_id: str) -> list[dict[str, Any]]:
+    init_db()
+    with SessionLocal() as session:
+        rows = session.query(EditorChatMessageModel).filter(EditorChatMessageModel.novel_id == novel_id).order_by(EditorChatMessageModel.index.asc()).all()
+        return [{"id": row.id, "role": row.role, "content": row.content or "", "index": row.index, "created_at": _format_time(row.created_at)} for row in rows]
+
+
+def append_editor_chat_messages(novel_id: str, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    init_db()
+    now = datetime.utcnow()
+    with SessionLocal() as session:
+        start = session.query(EditorChatMessageModel).filter(EditorChatMessageModel.novel_id == novel_id).count()
+        for offset, message in enumerate(messages):
+            role = str(message.get("role") or "user")
+            content = str(message.get("content") or "").strip()
+            if not content:
+                continue
+            index = start + offset
+            session.add(EditorChatMessageModel(id=f"{novel_id}:chat:{now.timestamp()}:{index}", novel_id=novel_id, index=index, role=role, content=content, created_at=now))
+        session.commit()
+    return list_editor_chat_messages(novel_id)
 
 
 def _rebuild_chapter_from_nodes(session: Any, novel_id: str, chapter_index: int) -> None:
@@ -315,6 +339,7 @@ def _detail_from_model(novel: NovelModel, state: dict[str, Any] | None = None) -
         detail["chapter_texts"] = state.get("chapter_texts")
     detail["assets"] = get_novel_assets(novel.id)
     detail["node_drafts"] = list_node_drafts(novel.id)
+    detail["editor_chat_messages"] = list_editor_chat_messages(novel.id)
     return detail
 
 

@@ -1,5 +1,14 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.6
+
+- 新增编辑器创作对话持久化模型 `editor_chat_messages`，作品加载时恢复左侧 AI 编辑聊天记录，删除作品时同步清理。
+- 新增接口 `GET/POST /api/v1/novel/{novel_id}/editor-chat`，左侧创作对话每轮用户消息与 AI 回复都会保存到数据库。
+- 左侧编辑器对话调用共创接口时携带当前写作现场：当前章节正文、当前选中节点、右侧教学检测结果与章节序号，让 AI 能围绕正在写的文本给建议。
+- 共创服务 `next_cocreation_turn` 支持 `writing_context`，优先针对当前章节、节点和检测结果回应，并继续归纳可确认的资产补丁。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml)、FastAPI 版本与页面 `APP_VERSION` 均提升至 `0.4.6`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.4.5
 
 - 创作台左侧改为 VSCode 式“创作对话”主面板：写作过程中可持续和 AI 编辑讨论章节推进、人物动机、反转、爽点、钩子等思路。

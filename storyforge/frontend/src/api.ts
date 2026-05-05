@@ -49,6 +49,7 @@ export type NovelDetail = NovelSummary & {
   chapter_texts?: string[]
   assets?: Record<string, string>
   node_drafts?: JsonRecord[]
+  editor_chat_messages?: JsonRecord[]
 }
 
 export type GeneratedSettings = {
@@ -164,6 +165,8 @@ export const api = {
   listNodes: (id: string) => request<{ items: JsonRecord[] }>(`/api/v1/novel/${encodeURIComponent(id)}/nodes`),
   saveNode: (id: string, data: JsonRecord) => request<JsonRecord>(`/api/v1/novel/${encodeURIComponent(id)}/node`, { method: 'POST', body: JSON.stringify(data) }),
   saveAssets: (id: string, data: { assets: Record<string, string> }) => request<{ assets: Record<string, string> }>(`/api/v1/novel/${encodeURIComponent(id)}/assets`, { method: 'POST', body: JSON.stringify(data) }),
+  listEditorChat: (id: string) => request<{ items: JsonRecord[] }>(`/api/v1/novel/${encodeURIComponent(id)}/editor-chat`),
+  appendEditorChat: (id: string, data: { messages: { role: string; content: string }[] }) => request<{ items: JsonRecord[] }>(`/api/v1/novel/${encodeURIComponent(id)}/editor-chat`, { method: 'POST', body: JSON.stringify(data) }),
   deleteNovel: (id: string) => request<{ status: string }>(`/api/v1/novel/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   generateSettings: (data: { logline: string; api_key?: string; api_base_url?: string; model?: string }) =>
     request<GeneratedSettings>('/api/v1/novel/generate-settings', { method: 'POST', body: JSON.stringify(data) }),

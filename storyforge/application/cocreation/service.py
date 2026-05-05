@@ -16,7 +16,7 @@ STAGE_FIELDS = [
 ]
 
 
-def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets: dict[str, Any], api_key: str = "", api_base_url: str = "", model: str = "") -> dict[str, Any]:
+def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets: dict[str, Any], writing_context: dict[str, Any] | None = None, api_key: str = "", api_base_url: str = "", model: str = "") -> dict[str, Any]:
     missing = [name for name, _desc in STAGE_FIELDS if not str(assets.get(name, "")).strip()]
     current = missing[0] if missing else "写作入口"
     guidance = select_writing_guidance(current, "期待感", "爽点", "结构", limit=2, max_chars=900)
@@ -27,6 +27,7 @@ def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets
 当前已确认资产：{assets}
 本轮用户输入：{user_last}
 当前优先补全字段：{current}
+当前写作现场：{writing_context or {}}
 可参考写作教学规则：{guidance}
 
 请返回 JSON：
@@ -40,6 +41,7 @@ def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets
 要求：
 1. 不要替作者拍板大量内容。
 2. 能从用户话里确认的资产才写入 asset_patch。
+2.5 如果 writing_context 有当前章节、当前节点、检测结果，请优先针对作者正在写的文本给建议。
 3. 如果七个字段已经基本完整，ready_for_writing 可以为 true。
 4. 语言像专业网文编辑，不要像表格填报。"""
     try:

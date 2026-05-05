@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from storyforge.infrastructure.ai.openai_adapter import call_llm
-from storyforge.infrastructure.persistence.novel_repository import create_novel, delete_novel, get_novel, list_node_drafts, list_novels, save_chapter_text, save_node_draft, update_target_word_count, upsert_novel_assets
+from storyforge.infrastructure.persistence.novel_repository import append_editor_chat_messages, create_novel, delete_novel, get_novel, list_editor_chat_messages, list_node_drafts, list_novels, save_chapter_text, save_node_draft, update_target_word_count, upsert_novel_assets
 
 router = APIRouter(tags=["novel"])
 LLM_CONFIG_PATH = Path(__file__).resolve().parents[3] / "llm_config.json"
@@ -50,6 +50,15 @@ class NodeDraftSaveRequest(BaseModel):
 
 class NovelAssetsSaveRequest(BaseModel):
     assets: dict[str, Any] = Field(default_factory=dict)
+
+
+class EditorChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class EditorChatAppendRequest(BaseModel):
+    messages: list[EditorChatMessage] = Field(default_factory=list)
 
 
 class GenerateSettingsRequest(BaseModel):
@@ -107,6 +116,20 @@ def novel_save_node(novel_id: str, request: NodeDraftSaveRequest) -> dict[str, A
     if get_novel(novel_id) is None:
         raise HTTPException(status_code=404, detail="novel not found")
     return save_node_draft(novel_id, request.chapter_index, request.node_index, request.node_type, request.content, request.locked, request.source, request.sync_chapter)
+
+
+@router.get("/api/v1/novel/{novel_id}/editor-chat")
+def novel_editor_chat(novel_id: str) -> dict[str, Any]:
+    if get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail="novel not found")
+    return {"items": list_editor_chat_messages(novel_id)}
+
+
+@router.post("/api/v1/novel/{novel_id}/editor-chat")
+def novel_append_editor_chat(novel_id: str, request: EditorChatAppendRequest) -> dict[str, Any]:
+    if get_novel(novel_id) is None:
+        raise HTTPException(status_code=404, detail="novel not found")
+    return {"items": append_editor_chat_messages(novel_id, [item.model_dump() for item in request.messages])}
 
 
 @router.post("/api/v1/novel/{novel_id}/assets")

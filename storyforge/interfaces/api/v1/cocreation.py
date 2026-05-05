@@ -19,6 +19,7 @@ class CocreationTurnRequest(BaseModel):
     logline: str = ""
     messages: list[CocreationMessage] = Field(default_factory=list)
     assets: dict[str, Any] = Field(default_factory=dict)
+    writing_context: dict[str, Any] = Field(default_factory=dict)
     api_key: str = ""
     api_base_url: str = ""
     model: str = ""
@@ -30,6 +31,7 @@ def cocreation_turn(request: CocreationTurnRequest) -> dict[str, Any]:
         logline=request.logline,
         messages=[item.model_dump() for item in request.messages],
         assets=request.assets,
+        writing_context=request.writing_context,
         api_key=request.api_key,
         api_base_url=request.api_base_url,
         model=request.model,

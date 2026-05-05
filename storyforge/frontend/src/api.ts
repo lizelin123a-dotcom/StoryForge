@@ -170,6 +170,7 @@ export const api = {
   deleteNovel: (id: string) => request<{ status: string }>(`/api/v1/novel/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   generateSettings: (data: { logline: string; api_key?: string; api_base_url?: string; model?: string }) =>
     request<GeneratedSettings>('/api/v1/novel/generate-settings', { method: 'POST', body: JSON.stringify(data) }),
+  listEditorSkills: () => request<{ items: JsonRecord[] }>('/api/v1/cocreation/skills'),
   cocreationTurn: (data: JsonRecord) => request<JsonRecord>('/api/v1/cocreation/turn', { method: 'POST', body: JSON.stringify(data) }),
 
   uploadNovel: (data: JsonRecord) => request<JsonRecord>('/api/v1/dissect/upload', { method: 'POST', body: JSON.stringify(data) }),

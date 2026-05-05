@@ -1,5 +1,16 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.8
+
+- 新增内置编辑 Skill 注册表 [`storyforge/knowledge/editor_skills`](storyforge/knowledge/editor_skills)，首批提供“职业网文编辑”和“情绪钩子设计师”两类专业提示词技能。
+- 新增 Skill 读取服务 [`editor_skills.py`](storyforge/infrastructure/knowledge/editor_skills.py)，支持列出和按 ID 注入编辑技能内容，为后续导入蒸馏从业人员 Skill 预留目录和接口。
+- 新增接口 `GET /api/v1/cocreation/skills`，前端可读取可用编辑 Skill 列表。
+- 左侧 AI 创作对话支持 Skill 选择，已选 Skill 会随 `/api/v1/cocreation/turn` 的 `skill_ids` 传给后端，并注入共创/改稿 prompt。
+- Skill 规则在共创服务中高于普通建议优先级，会影响 AI 的判断、追问和 `edit_patch` 生成，让左侧 AI 编辑更专业。
+- 前端会记住已选 Skill，首次启动默认启用第一个可用 Skill。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml)、FastAPI 版本与页面 `APP_VERSION` 均提升至 `0.4.8`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.4.7
 
 - 共创/编辑对话后端返回结构新增 `edit_patch`，当作者要求改稿、补写、替换、加强爽点或加钩子时，AI 必须给出可应用到当前节点或章节的修改补丁，而不只停留在建议层。

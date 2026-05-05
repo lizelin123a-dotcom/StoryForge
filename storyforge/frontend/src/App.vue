@@ -12,10 +12,10 @@ import LeftSettingsPanel from './components/LeftSettingsPanel.vue'
 import NoticeToast from './components/NoticeToast.vue'
 import NovelWizard from './components/NovelWizard.vue'
 import RightMonitorPanel from './components/RightMonitorPanel.vue'
-import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
+import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, EditorSkill, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.7'
+const APP_VERSION = '0.4.8'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -82,6 +82,8 @@ const editorChatInput = ref('')
 const editorChatMessages = ref<CocreationMessage[]>([])
 const editorChatLoading = ref(false)
 const editorChatLastTurn = ref<CocreationTurn | null>(null)
+const editorSkills = ref<EditorSkill[]>([])
+const selectedEditorSkillIds = ref<string[]>(JSON.parse(localStorage.getItem('storyforge.editorSkillIds') || '[]'))
 const writingAnalysis = ref<WritingAnalysis | null>(null)
 const analysisLoading = ref(false)
 
@@ -349,6 +351,28 @@ async function toggleNodeLock(node: NodeDraft) {
   upsertNodeDraft(saved)
 }
 
+function normalizeEditorSkills(rows: unknown[]): EditorSkill[] {
+  return rows.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object').map((row) => ({ id: String(row.id || ''), title: String(row.title || row.id || ''), description: String(row.description || '') })).filter((skill) => skill.id)
+}
+
+async function loadEditorSkills() {
+  try {
+    const result = await api.listEditorSkills()
+    editorSkills.value = normalizeEditorSkills(result.items)
+    if (!selectedEditorSkillIds.value.length && editorSkills.value.length) {
+      selectedEditorSkillIds.value = [editorSkills.value[0].id]
+      localStorage.setItem('storyforge.editorSkillIds', JSON.stringify(selectedEditorSkillIds.value))
+    }
+  } catch (error) {
+    appNotice.value = `编辑 Skill 加载失败：${String(error)}`
+  }
+}
+
+function toggleEditorSkill(skillId: string) {
+  selectedEditorSkillIds.value = selectedEditorSkillIds.value.includes(skillId) ? selectedEditorSkillIds.value.filter((id) => id !== skillId) : [...selectedEditorSkillIds.value, skillId]
+  localStorage.setItem('storyforge.editorSkillIds', JSON.stringify(selectedEditorSkillIds.value))
+}
+
 function persistConfig() {
   localStorage.setItem('storyforge.apiKey', writingForm.apiKey)
   localStorage.setItem('storyforge.llmApiBaseUrl', writingForm.apiBaseUrl)
@@ -422,6 +446,7 @@ async function sendEditorChat() {
         selected_node: selectedNode.value,
         writing_analysis: writingAnalysis.value,
       },
+      skill_ids: selectedEditorSkillIds.value,
       api_key: writingForm.apiKey,
       api_base_url: writingForm.apiBaseUrl,
       model: writingForm.model,
@@ -659,6 +684,7 @@ onMounted(async () => {
   window.onhashchange = syncRouteFromHash
   syncRouteFromHash()
   await refreshNovels()
+  await loadEditorSkills()
   connect(applyEvent)
 })
 </script>
@@ -686,8 +712,11 @@ onMounted(async () => {
           :editor-chat-messages="editorChatMessages"
           :editor-chat-loading="editorChatLoading"
           :editor-chat-last-turn="editorChatLastTurn"
+          :editor-skills="editorSkills"
+          :selected-skill-ids="selectedEditorSkillIds"
           @send-editor-chat="sendEditorChat"
           @apply-editor-patch="applyEditorPatch"
+          @toggle-editor-skill="toggleEditorSkill"
           @start-writing="startWriting"
           @pause-writing="pauseWriting"
           @resume-writing="resumeWriting"

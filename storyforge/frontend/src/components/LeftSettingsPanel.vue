@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CocreationMessage, CocreationTurn } from '../types'
+import type { CocreationMessage, CocreationTurn, EditorSkill } from '../types'
 import type { NovelDetail } from '../api'
 
 defineProps<{
@@ -23,6 +23,8 @@ defineProps<{
   editorChatMessages: CocreationMessage[]
   editorChatLoading: boolean
   editorChatLastTurn: CocreationTurn | null
+  editorSkills: EditorSkill[]
+  selectedSkillIds: string[]
 }>()
 
 const emit = defineEmits<{
@@ -37,6 +39,7 @@ const emit = defineEmits<{
   resumeWriting: []
   exportText: []
   applyEditorPatch: []
+  toggleEditorSkill: [skillId: string]
 }>()
 </script>
 
@@ -54,8 +57,14 @@ const emit = defineEmits<{
 
       <section class="mb-3 flex min-h-0 flex-1 flex-col rounded-xl border border-[#2a2a2a] bg-[#101010] shadow-lg shadow-black/20">
         <div class="border-b border-[#2a2a2a] px-4 py-3">
-          <div class="text-sm font-medium text-white">创作对话</div>
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-sm font-medium text-white">创作对话</div>
+            <span class="rounded-full border border-indigo-500/30 px-2 py-0.5 text-[11px] text-indigo-200">Skill {{ selectedSkillIds.length }}</span>
+          </div>
           <p class="mt-1 text-xs text-zinc-500">写作过程中继续聊思路。AI 会归纳并写入资产，不需要你手动填表。</p>
+          <div v-if="editorSkills.length" class="mt-3 flex gap-2 overflow-x-auto pb-1">
+            <button v-for="skill in editorSkills" :key="skill.id" class="shrink-0 rounded-full border px-3 py-1 text-[11px]" :class="selectedSkillIds.includes(skill.id) ? 'border-indigo-500/50 bg-indigo-500/20 text-white' : 'border-[#2a2a2a] bg-[#0f0f0f] text-zinc-500 hover:text-zinc-200'" :title="skill.description" @click="emit('toggleEditorSkill', skill.id)">{{ skill.title }}</button>
+          </div>
         </div>
         <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
           <div v-if="!editorChatMessages.length" class="rounded-xl border border-dashed border-[#333] p-4 text-sm leading-7 text-zinc-500">可以直接问：这一章怎么推进？这个角色动机弱不弱？这里缺不缺爽点？我想加一个反转行不行？</div>

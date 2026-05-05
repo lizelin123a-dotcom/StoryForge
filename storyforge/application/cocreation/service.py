@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from storyforge.infrastructure.ai.openai_adapter import call_llm
-from storyforge.infrastructure.knowledge import select_writing_guidance
+from storyforge.infrastructure.knowledge import get_editor_skills, select_writing_guidance
 
 STAGE_FIELDS = [
     ("核心灵感", "用一句话确认这部小说真正想写的快感和承诺。"),
@@ -16,10 +16,11 @@ STAGE_FIELDS = [
 ]
 
 
-def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets: dict[str, Any], writing_context: dict[str, Any] | None = None, api_key: str = "", api_base_url: str = "", model: str = "") -> dict[str, Any]:
+def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets: dict[str, Any], writing_context: dict[str, Any] | None = None, skill_ids: list[str] | None = None, api_key: str = "", api_base_url: str = "", model: str = "") -> dict[str, Any]:
     missing = [name for name, _desc in STAGE_FIELDS if not str(assets.get(name, "")).strip()]
     current = missing[0] if missing else "写作入口"
     guidance = select_writing_guidance(current, "期待感", "爽点", "结构", limit=2, max_chars=900)
+    editor_skills = get_editor_skills(skill_ids or [], max_chars=3600)
     user_last = _last_user_message(messages) or logline
     prompt = f"""你是 StoryForge 的共创编辑。不要一次性替作者生成完整设定，而是像对话框一样逐步追问、归纳和沉淀小说资产。
 
@@ -28,6 +29,7 @@ def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets
 本轮用户输入：{user_last}
 当前优先补全字段：{current}
 当前写作现场：{writing_context or {}}
+已启用编辑 Skill：{editor_skills}
 可参考写作教学规则：{guidance}
 
 请返回 JSON：
@@ -51,7 +53,8 @@ def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets
 2.5 如果 writing_context 有当前章节、当前节点、检测结果，请优先针对作者正在写的文本给建议。
 2.6 如果作者明确要求“改一下/替换/补一段/写入/应用/加强爽点/加钩子”等，必须给 edit_patch。target 优先 node，其次 chapter。不要只给建议。
 3. 如果七个字段已经基本完整，ready_for_writing 可以为 true。
-4. 语言像专业网文编辑，不要像表格填报。"""
+4. 语言像专业网文编辑，不要像表格填报。
+5. 已启用编辑 Skill 的规则优先级高于普通建议，必须体现在判断、追问和 edit_patch 中。"""
     try:
         content = call_llm(prompt=prompt, system_prompt="你只返回 JSON。", json_mode=True, api_key=api_key or None, base_url=(api_base_url or None), model=model or None)
         import json

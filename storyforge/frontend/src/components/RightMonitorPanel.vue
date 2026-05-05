@@ -32,15 +32,15 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <aside class="border-l border-[#2a2a2a] bg-[#141414] transition-all duration-150" :class="collapsed ? 'w-12' : 'w-[380px]'">
+  <aside class="border-l border-[#2a2a2a] bg-[#141414] transition-all duration-150" :class="collapsed ? 'w-12' : 'w-[360px]'">
     <button v-if="collapsed" class="h-full w-12 text-zinc-500 hover:bg-[#1a1a1a] hover:text-white" @click="emit('update:collapsed', false)">‹</button>
     <div v-else class="h-full overflow-y-auto p-4">
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-base font-semibold text-white">监控面板</h2>
         <button class="rounded-lg border border-[#2a2a2a] px-2 text-zinc-500 hover:text-white" @click="emit('update:collapsed', true)">›</button>
       </div>
-      <div class="mb-3 grid grid-cols-5 gap-1 rounded-xl bg-[#0f0f0f] p-1 text-xs">
-        <button v-for="tab in tabs" :key="tab" class="rounded-lg px-2 py-1.5" :class="activeTab === tab ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'" @click="emit('update:activeTab', tab)">{{ tab }}</button>
+      <div class="mb-3 flex gap-1 overflow-x-auto rounded-xl bg-[#0f0f0f] p-1 text-xs">
+        <button v-for="tab in tabs" :key="tab" class="shrink-0 rounded-lg px-3 py-1.5" :class="activeTab === tab ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'" @click="emit('update:activeTab', tab)">{{ tab }}</button>
       </div>
 
       <div v-if="activeTab === '检测'" class="space-y-3">
@@ -80,7 +80,7 @@ const emit = defineEmits<{
       <div v-else-if="activeTab === '审阅'" class="space-y-3">
         <div v-if="pendingNode" class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm leading-7 text-amber-100">
           <div class="mb-2 font-medium">正在审阅：{{ pendingNodeTitle }}</div>
-          <p class="text-xs text-zinc-400">审阅内容已经合并到中间右侧的“节点草稿 / 审阅”编辑器，请在那里直接修改、通过或回滚。这里不再重复弹第二个编辑框。</p>
+          <p class="text-xs text-zinc-400">审阅内容已合并到中间右侧的“节点草稿 / 审阅”。这里仅保留状态提醒，避免重复编辑框。</p>
         </div>
         <div v-else class="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-4 text-sm text-zinc-400">当前没有待审阅节点。</div>
       </div>

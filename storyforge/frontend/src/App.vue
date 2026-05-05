@@ -15,7 +15,7 @@ import RightMonitorPanel from './components/RightMonitorPanel.vue'
 import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, EditorSkill, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '1.0.1'
+const APP_VERSION = '1.1.0'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -711,12 +711,12 @@ onMounted(async () => {
   <div class="min-h-screen min-w-[1024px] bg-[#0f0f0f] text-[#e0e0e0]">
     <AppSidebar :route="route" :sse-status="sseStatus" :nav-items="navItems" @go="go" />
 
-    <main class="ml-[60px] min-h-screen">
+    <main class="ml-[60px] min-h-screen overflow-hidden">
       <NoticeToast :notice="appNotice" @close="appNotice = ''" />
 
       <BookcasePage v-if="route === 'bookcase'" :novels="novels" @create="openCocreation" @load="loadNovel" />
 
-      <section v-else-if="route === 'edit'" class="flex h-screen overflow-hidden">
+      <section v-else-if="route === 'edit'" class="flex h-screen min-w-0 overflow-hidden">
         <LeftSettingsPanel
           v-model:collapsed="leftCollapsed"
           v-model:setting-open="settingOpen"

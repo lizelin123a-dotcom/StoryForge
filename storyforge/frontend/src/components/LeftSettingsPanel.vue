@@ -44,7 +44,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <aside class="border-r border-[#2a2a2a] bg-[#141414] transition-all duration-150" :class="collapsed ? 'w-12' : 'w-[360px]'">
+  <aside class="border-r border-[#2a2a2a] bg-[#141414] transition-all duration-150" :class="collapsed ? 'w-12' : 'w-[340px]'">
     <button v-if="collapsed" class="h-full w-12 text-zinc-500 hover:bg-[#1a1a1a] hover:text-white" @click="emit('update:collapsed', false)">›</button>
     <div v-else class="flex h-full flex-col p-4">
       <div class="mb-4 flex items-start justify-between gap-3">
@@ -76,7 +76,7 @@ const emit = defineEmits<{
         </div>
       </section>
 
-      <section class="max-h-[32vh] overflow-y-auto rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] shadow-lg shadow-black/20">
+      <section class="max-h-[28vh] overflow-y-auto rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] shadow-lg shadow-black/20">
         <button class="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-white" @click="emit('update:settingOpen', !settingOpen)">资产与操作 <span class="text-zinc-500">{{ settingOpen ? '−' : '+' }}</span></button>
         <div v-if="settingOpen" class="space-y-3 border-t border-[#2a2a2a] p-4">
           <div v-if="selectedNovel?.assets && Object.keys(selectedNovel.assets).length" class="rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-3">
@@ -109,7 +109,7 @@ const emit = defineEmits<{
         </div>
       </section>
 
-      <div class="mt-3 grid grid-cols-2 gap-2">
+      <div class="mt-3 grid grid-cols-2 gap-2 shrink-0">
         <button class="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-medium text-emerald-950 hover:bg-emerald-400" @click="emit('startWriting')">▶ 启动写作</button>
         <button class="rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-amber-950 hover:bg-amber-400" @click="emit('pauseWriting')">⏸ 暂停</button>
         <button class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500" @click="emit('resumeWriting')">▶ 继续</button>

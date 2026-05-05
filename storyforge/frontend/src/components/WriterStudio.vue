@@ -169,11 +169,34 @@ const assetEntries = computed(() => Object.entries(props.selectedNovel?.assets |
       </aside>
     </div>
 
-    <div v-if="debugOpen" class="debug-drawer">
-      <div><h3>调试抽屉</h3><button class="sf-icon-btn" @click="debugOpen = false">×</button></div>
-      <details><summary>生成逻辑</summary><p v-for="(item, index) in generationLogic" :key="index">{{ item }}</p></details>
-      <details><summary>事件</summary><p v-for="event in latestEvents" :key="event.receivedAt + event.type">{{ event.type }} · {{ event.receivedAt }}</p></details>
-      <details><summary>高级配置</summary><label>对标素材 ID<input :value="dissectSourceId" @input="emit('update:dissectSourceId', ($event.target as HTMLInputElement).value)" /></label><label><input :checked="fullAutoMode" type="checkbox" @change="emit('update:fullAutoMode', ($event.target as HTMLInputElement).checked)" /> 全自动模式：跳过节点审阅</label><button class="sf-btn sf-btn--ghost" @click="emit('exportText')">导出全文</button></details>
-    </div>
+    <aside v-if="debugOpen" class="debug-drawer" aria-label="后台札记">
+      <header class="debug-drawer__header">
+        <div>
+          <p class="section-kicker">Backstage Notes</p>
+          <h3>后台札记</h3>
+        </div>
+        <button class="sf-icon-btn" aria-label="关闭后台札记" @click="debugOpen = false">×</button>
+      </header>
+      <div class="debug-drawer__body">
+        <details class="debug-section">
+          <summary>生成逻辑 <span>{{ generationLogic.length }}</span></summary>
+          <p v-for="(item, index) in generationLogic" :key="index">{{ item }}</p>
+          <p v-if="!generationLogic.length" class="debug-empty">暂无生成逻辑记录。</p>
+        </details>
+        <details class="debug-section">
+          <summary>事件 <span>{{ latestEvents.length }}</span></summary>
+          <p v-for="event in latestEvents" :key="event.receivedAt + event.type">{{ event.type }} · {{ event.receivedAt }}</p>
+          <p v-if="!latestEvents.length" class="debug-empty">暂无事件。</p>
+        </details>
+        <details class="debug-section" open>
+          <summary>高级配置</summary>
+          <div class="debug-form">
+            <label>对标素材 ID<input :value="dissectSourceId" placeholder="可选" @input="emit('update:dissectSourceId', ($event.target as HTMLInputElement).value)" /></label>
+            <label class="debug-check"><input :checked="fullAutoMode" type="checkbox" @change="emit('update:fullAutoMode', ($event.target as HTMLInputElement).checked)" /> 全自动模式：跳过节点审阅</label>
+            <button class="sf-btn sf-btn--ghost" @click="emit('exportText')">导出全文</button>
+          </div>
+        </details>
+      </div>
+    </aside>
   </section>
 </template>

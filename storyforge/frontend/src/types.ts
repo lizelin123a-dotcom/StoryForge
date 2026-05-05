@@ -1,4 +1,4 @@
-export type RouteName = 'bookcase' | 'edit' | 'dissect' | 'config' | 'about'
+export type RouteName = 'bookcase' | 'edit' | 'new-book' | 'dissect' | 'config' | 'about'
 export type StepState = '待执行' | '执行中' | '已完成' | '失败'
 export type Chapter = { title: string; content: string; nodeLabel: string; nodesDone: number; nodesTotal: number; dirty?: boolean }
 export type NodeDraft = { id: string; chapter_index: number; node_index: number; node_type: string; content: string; locked: boolean; source: string; updated_at?: string }

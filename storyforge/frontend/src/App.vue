@@ -4,22 +4,15 @@ import { api, getApiBase, setApiBase, type CharacterSetting, type DaemonState, t
 import AboutPage from './components/AboutPage.vue'
 import AppSidebar from './components/AppSidebar.vue'
 import BookcasePage from './components/BookcasePage.vue'
-import CocreationWizard from './components/CocreationWizard.vue'
 import ConfigPage from './components/ConfigPage.vue'
 import DissectPage from './components/DissectPage.vue'
+import NewBookPage from './components/NewBookPage.vue'
 import NoticeToast from './components/NoticeToast.vue'
-import NovelWizard from './components/NovelWizard.vue'
 import WriterStudio from './components/WriterStudio.vue'
 import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, EditorSkill, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
 const APP_VERSION = '2.0.0'
-const navItems: { key: RouteName; icon: string; label: string }[] = [
-  { key: 'bookcase', icon: '📂', label: '书架' },
-  { key: 'edit', icon: '✍️', label: '创作台' },
-  { key: 'config', icon: '🛠', label: '配置' },
-  { key: 'about', icon: 'ℹ️', label: '关于' },
-]
 const rightTabs: RightTab[] = ['检测', '监控', '审阅', '生成逻辑', '事件']
 
 const emptyState = (novelId = ''): DaemonState => ({
@@ -56,8 +49,6 @@ const saveLoading = ref(false)
 const daemonState = ref<DaemonState>(emptyState())
 const { events, status: sseStatus, connect } = useSSE()
 
-const leftCollapsed = ref(false)
-const rightCollapsed = ref(false)
 const settingOpen = ref(true)
 const activeRightTab = ref<RightTab>('检测')
 const fullAutoMode = ref(false)
@@ -66,16 +57,9 @@ const reviewInstructions = ref('')
 const generationLogic = ref<string[]>([])
 const dissectSourceId = ref('')
 
-const wizardOpen = ref(false)
 const wizardLoading = ref(false)
 const wizardLogline = ref('')
 const wizardSettings = ref<GeneratedSettings | null>(null)
-const cocreationOpen = ref(false)
-const cocreationLoading = ref(false)
-const cocreationInput = ref('')
-const cocreationMessages = ref<CocreationMessage[]>([])
-const cocreationAssets = ref<Record<string, string>>({})
-const cocreationLastTurn = ref<CocreationTurn | null>(null)
 const editorChatInput = ref('')
 const editorChatMessages = ref<CocreationMessage[]>([])
 const editorChatLoading = ref(false)
@@ -156,7 +140,7 @@ function hashToRoute() {
   if (!hash) return { name: 'bookcase' as RouteName, id: '' }
   const [name, id] = hash.split('/')
   if (name === 'edit') return { name: 'edit' as RouteName, id: id || '' }
-  if (['bookcase', 'dissect', 'config', 'about'].includes(name)) return { name: name as RouteName, id: '' }
+  if (['bookcase', 'new-book', 'dissect', 'config', 'about'].includes(name)) return { name: name as RouteName, id: '' }
   return { name: 'bookcase' as RouteName, id: '' }
 }
 
@@ -393,11 +377,6 @@ function persistConfig() {
   setApiBase(writingForm.backendApiBaseUrl)
 }
 
-function openCocreation() {
-  wizardOpen.value = false
-  cocreationOpen.value = true
-}
-
 async function generateNovelSettings() {
   if (wizardLogline.value.trim().length > 100) {
     appNotice.value = '一句话灵感最多 100 个字。'
@@ -411,33 +390,6 @@ async function generateNovelSettings() {
     appNotice.value = `生成设定失败：${String(error)}`
   } finally {
     wizardLoading.value = false
-  }
-}
-
-async function sendCocreationTurn() {
-  const userText = cocreationInput.value.trim() || wizardLogline.value.trim()
-  if (!userText) return
-  try {
-    cocreationLoading.value = true
-    persistConfig()
-    const userMessage: CocreationMessage = { role: 'user', content: userText }
-    cocreationMessages.value.push(userMessage)
-    cocreationInput.value = ''
-    const turn = await api.cocreationTurn({
-      logline: wizardLogline.value,
-      messages: cocreationMessages.value,
-      assets: cocreationAssets.value,
-      api_key: writingForm.apiKey,
-      api_base_url: writingForm.apiBaseUrl,
-      model: writingForm.model,
-    }) as unknown as CocreationTurn
-    cocreationLastTurn.value = turn
-    cocreationAssets.value = { ...cocreationAssets.value, ...(turn.asset_patch || {}) }
-    cocreationMessages.value.push({ role: 'assistant', content: turn.reply })
-  } catch (error) {
-    appNotice.value = `共创讨论失败：${String(error)}`
-  } finally {
-    cocreationLoading.value = false
   }
 }
 
@@ -472,7 +424,7 @@ async function sendEditorChat() {
       const changedExisting = Object.keys(turn.asset_patch).some((key) => selectedNovel.value?.assets?.[key] && selectedNovel.value.assets[key] !== turn.asset_patch[key])
       const result = await api.saveAssets(selectedNovel.value.id, { assets: turn.asset_patch })
       selectedNovel.value = { ...selectedNovel.value, assets: result.assets }
-      appNotice.value = changedExisting ? 'AI 编辑已根据新思路修正作品资产。' : 'AI 编辑已把本轮确认内容写入作品资产。'
+      appNotice.value = changedExisting ? 'AI 编辑已根据新思路修正案头设定。' : 'AI 编辑已把本轮确认内容写入案头设定。'
     }
   } catch (error) {
     appNotice.value = `创作对话失败：${String(error)}`
@@ -505,31 +457,10 @@ async function applyEditorPatch() {
   }
 }
 
-async function createNovelFromCocreation() {
-  const assets = cocreationAssets.value
-  const data: GeneratedSettings = {
-    title: assets['核心灵感']?.slice(0, 18) || wizardLogline.value.slice(0, 18) || '未命名作品',
-    world_setting: ['世界规则', '核心矛盾', '期待钩子', '爽点模型'].map((key) => `${key}：${assets[key] || '待补充'}`).join('\n'),
-    characters: [{ name: '主角', role: '主角', description: assets['主角欲望'] || '待补充' }, { name: '对手/阻碍方', role: '反派/阻碍', description: assets['核心矛盾'] || '待补充' }, { name: '关系角色', role: '配角', description: assets['角色关系'] || '待补充' }],
-    genre: '共创项目',
-    target_word_count: Number(writingForm.target_word_count || 120000),
-  }
-  try {
-    const novel = await api.createNovel(data)
-    await api.saveAssets(novel.id, { assets })
-    cocreationOpen.value = false
-    await refreshNovels()
-    await loadNovel(novel.id)
-  } catch (error) {
-    appNotice.value = `创建作品失败：${String(error)}`
-  }
-}
-
 async function createNovelFromWizard() {
   if (!wizardSettings.value) return
   try {
     const novel = await api.createNovel(wizardSettings.value)
-    wizardOpen.value = false
     wizardLogline.value = ''
     wizardSettings.value = null
     await refreshNovels()
@@ -706,18 +637,26 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen min-w-[1024px] bg-[#0f0f0f] text-[#e0e0e0]">
-    <AppSidebar :route="route" :sse-status="sseStatus" :nav-items="navItems" @go="go" />
+  <div class="min-h-screen min-w-[1280px] bg-[var(--sf-bg)] text-[var(--sf-text)]">
+    <AppSidebar :route="route" :sse-status="sseStatus" @go="go" />
 
-    <main class="ml-[60px] min-h-screen overflow-hidden">
+    <main class="ml-[56px] min-h-screen overflow-hidden">
       <NoticeToast :notice="appNotice" @close="appNotice = ''" />
 
-      <BookcasePage v-if="route === 'bookcase'" :novels="novels" @create="openCocreation" @load="loadNovel" />
+      <BookcasePage v-if="route === 'bookcase'" :novels="novels" @create="go('new-book')" @load="loadNovel" />
+
+      <NewBookPage
+        v-else-if="route === 'new-book'"
+        v-model:logline="wizardLogline"
+        v-model:settings="wizardSettings"
+        :loading="wizardLoading"
+        @generate="generateNovelSettings"
+        @accept="createNovelFromWizard"
+        @back="go('bookcase')"
+      />
 
       <WriterStudio
         v-else-if="route === 'edit'"
-        v-model:left-collapsed="leftCollapsed"
-        v-model:right-collapsed="rightCollapsed"
         v-model:setting-open="settingOpen"
         v-model:full-auto-mode="fullAutoMode"
         v-model:dissect-source-id="dissectSourceId"
@@ -784,31 +723,6 @@ onMounted(async () => {
       <AboutPage v-else :version="APP_VERSION" />
     </main>
 
-    <CocreationWizard
-      :open="cocreationOpen"
-      :loading="cocreationLoading"
-      :logline="wizardLogline"
-      :input="cocreationInput"
-      :messages="cocreationMessages"
-      :assets="cocreationAssets"
-      :last-turn="cocreationLastTurn"
-      @close="cocreationOpen = false"
-      @update:logline="wizardLogline = $event"
-      @update:input="cocreationInput = $event"
-      @send="sendCocreationTurn"
-      @accept="createNovelFromCocreation"
-    />
 
-    <NovelWizard
-      :open="wizardOpen"
-      :loading="wizardLoading"
-      :logline="wizardLogline"
-      :settings="wizardSettings"
-      @close="wizardOpen = false"
-      @update:logline="wizardLogline = $event"
-      @update:settings="wizardSettings = $event"
-      @generate="generateNovelSettings"
-      @accept="createNovelFromWizard"
-    />
   </div>
 </template>

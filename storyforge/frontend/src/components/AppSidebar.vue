@@ -4,7 +4,6 @@ import type { RouteName } from '../types'
 defineProps<{
   route: RouteName
   sseStatus: string
-  navItems: { key: RouteName; icon: string; label: string }[]
 }>()
 
 const emit = defineEmits<{
@@ -13,20 +12,14 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <aside class="fixed inset-y-0 left-0 z-20 flex w-[60px] flex-col items-center border-r border-[#2a2a2a] bg-[#111111]/95 py-4 shadow-2xl shadow-black/30 backdrop-blur">
-    <div class="mb-6 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/15 text-lg text-indigo-300 ring-1 ring-indigo-500/25">S</div>
-    <nav class="flex flex-1 flex-col gap-3">
-      <button
-        v-for="item in navItems"
-        :key="item.key"
-        :title="item.label"
-        class="flex h-10 w-10 items-center justify-center rounded-xl border text-xl hover:-translate-y-0.5"
-        :class="route === item.key ? 'border-indigo-500/40 bg-indigo-500/20 text-white shadow-lg shadow-indigo-950/30' : 'border-transparent bg-transparent text-zinc-500 hover:border-[#2a2a2a] hover:bg-[#1a1a1a] hover:text-zinc-200'"
-        @click="emit('go', item.key)"
-      >
-        {{ item.icon }}
-      </button>
+  <aside class="storybook-menu">
+    <button class="storybook-menu__brand" title="回到书架" @click="emit('go', 'bookcase')">架</button>
+    <nav class="storybook-menu__nav" aria-label="StoryForge 导航">
+      <button title="书架" :class="route === 'bookcase' ? 'is-active' : ''" @click="emit('go', 'bookcase')">📚</button>
+      <button title="拆书工坊" :class="route === 'dissect' ? 'is-active' : ''" @click="emit('go', 'dissect')">🔍</button>
+      <button title="设置" :class="route === 'config' ? 'is-active' : ''" @click="emit('go', 'config')">⚙️</button>
+      <button title="关于" :class="route === 'about' ? 'is-active' : ''" @click="emit('go', 'about')">?</button>
     </nav>
-    <div class="h-2 w-2 rounded-full" :class="sseStatus === 'connected' ? 'bg-emerald-400' : sseStatus === 'error' ? 'bg-red-400' : 'bg-amber-400'"></div>
+    <div class="storybook-menu__signal" :class="sseStatus === 'connected' ? 'is-on' : sseStatus === 'error' ? 'is-error' : ''" title="连接状态"></div>
   </aside>
 </template>

@@ -12,7 +12,7 @@ import WriterStudio from './components/WriterStudio.vue'
 import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, EditorSkill, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '2.0.0'
+const APP_VERSION = '2.0.1'
 const rightTabs: RightTab[] = ['检测', '监控', '审阅', '生成逻辑', '事件']
 
 const emptyState = (novelId = ''): DaemonState => ({

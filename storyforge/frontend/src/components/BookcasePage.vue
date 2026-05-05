@@ -24,10 +24,10 @@ const emit = defineEmits<{
 
     <div class="bookshelf-frame">
       <div v-if="novels.length" class="bookshelf-grid">
-        <article v-for="novel in novels" :key="novel.id" class="book-cover-card" @click="emit('load', novel.id)">
-          <div class="book-cover-card__book">
+        <article v-for="(novel, index) in novels" :key="novel.id" class="book-cover-card" @click="emit('load', novel.id)">
+          <div class="book-cover-card__book" :class="`book-cover-card__book--v${index % 5}`">
             <div class="book-cover-card__spine"></div>
-            <div class="book-cover-card__ornament">✦</div>
+            <div class="book-cover-card__ornament">{{ ['✦', '❖', '✧', '◆', '✹'][index % 5] }}</div>
             <h2>{{ novel.title }}</h2>
             <p>{{ novel.genre || '未分类手稿' }}</p>
           </div>

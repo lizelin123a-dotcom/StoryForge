@@ -11,6 +11,7 @@ from storyforge.application.daemon.services.daemon_orchestrator import DaemonOrc
 from storyforge.application.daemon.services.sse_event_service import SSEEventManager
 from storyforge.infrastructure.ai.openai_adapter import call_llm
 from storyforge.infrastructure.persistence.daemon_state_repository import load_daemon_state, load_latest_daemon_state, save_daemon_state
+from storyforge.infrastructure.persistence.novel_repository import save_chapter_text, save_node_draft
 
 router = APIRouter(tags=["daemon"])
 orchestrators: dict[str, DaemonOrchestrator] = {}
@@ -108,7 +109,10 @@ def resume_daemon(novel_id: str | None = None) -> dict[str, str]:
 
 @router.post("/api/v1/daemon/review/approve")
 def approve_review(request: ReviewDecisionRequest) -> dict[str, Any]:
-    current = _get_orchestrator(request.novel_id)
+    current = _get_running_orchestrator(request.novel_id) if request.novel_id else _latest_running_orchestrator()
+    if current is None:
+        node = _resolve_saved_pending_review(request, "approved")
+        return {"status": "approved", "node": node, "source": "saved_state"}
     try:
         node = current.approve_pending_node(request.content, request.instructions)
     except ValueError as exc:
@@ -118,7 +122,10 @@ def approve_review(request: ReviewDecisionRequest) -> dict[str, Any]:
 
 @router.post("/api/v1/daemon/review/rewrite")
 def rewrite_review(request: ReviewDecisionRequest) -> dict[str, Any]:
-    current = _get_orchestrator(request.novel_id)
+    current = _get_running_orchestrator(request.novel_id) if request.novel_id else _latest_running_orchestrator()
+    if current is None:
+        node = _resolve_saved_pending_review(request, "rewritten")
+        return {"status": "rewritten", "node": node, "source": "saved_state"}
     try:
         node = current.rewrite_pending_node(request.content, request.instructions)
     except ValueError as exc:
@@ -128,7 +135,10 @@ def rewrite_review(request: ReviewDecisionRequest) -> dict[str, Any]:
 
 @router.post("/api/v1/daemon/review/rollback")
 def rollback_review(request: ReviewDecisionRequest) -> dict[str, Any]:
-    current = _get_orchestrator(request.novel_id)
+    current = _get_running_orchestrator(request.novel_id) if request.novel_id else _latest_running_orchestrator()
+    if current is None:
+        node = _resolve_saved_pending_review(request, "rolled_back")
+        return {"status": "rolled_back", "node": node, "source": "saved_state"}
     try:
         node = current.rollback_pending_node(request.instructions)
     except ValueError as exc:
@@ -168,6 +178,50 @@ def daemon_status(novel_id: str | None = None) -> dict[str, Any]:
     if latest_state is not None:
         return latest_state
     return _idle_state()
+
+
+def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str) -> dict[str, Any]:
+    state = load_daemon_state(request.novel_id) if request.novel_id else load_latest_daemon_state()
+    if state is None:
+        raise HTTPException(status_code=404, detail="daemon is not started")
+    manual = dict(state.get("manual_review") or {})
+    pending = manual.get("pending")
+    if not pending:
+        raise HTTPException(status_code=409, detail="no pending review node")
+    resolved = dict(pending)
+    if request.content is not None and decision != "rolled_back":
+        resolved["content"] = request.content
+    resolved["decision"] = decision
+    resolved["instructions"] = request.instructions
+    manual.setdefault("history", []).append(resolved)
+    manual["pending"] = None
+    manual["decision"] = {"type": decision, "content": request.content, "instructions": request.instructions}
+    manual["instructions"] = request.instructions
+    state["manual_review"] = manual
+    novel_id = str(state.get("novel_id") or request.novel_id or "")
+    chapter_index = int(resolved.get("chapter_index") or 1)
+    node_index = int(resolved.get("node_index") or 1)
+    node_type = str(resolved.get("node_type") or "节点")
+    content = str(resolved.get("content") or "")
+    if decision != "rolled_back" and novel_id and content:
+        save_node_draft(novel_id, chapter_index, node_index, node_type, content, locked=True, source="manual_review", sync_chapter=False)
+        chapter_texts = list(state.get("chapter_texts") or [])
+        while len(chapter_texts) < chapter_index:
+            chapter_texts.append("")
+        existing = str(chapter_texts[chapter_index - 1] or "")
+        chapter_texts[chapter_index - 1] = f"{existing}{chr(10) + chr(10) if existing else ''}{content}"
+        state["chapter_texts"] = chapter_texts
+        state["baseline_texts"] = chapter_texts
+        progress = dict(state.get("progress") or {})
+        progress["written_chapters"] = max(int(progress.get("written_chapters") or 0), chapter_index)
+        progress["total_words"] = sum(len(str(text or "")) for text in chapter_texts)
+        state["progress"] = progress
+        save_chapter_text(novel_id, chapter_index, chapter_texts[chapter_index - 1])
+    state["status"] = "paused"
+    state["current_phase"] = "reviewing"
+    save_daemon_state(state)
+    sse_manager.broadcast({"type": "node_review_resolved", "data": {"decision": decision, "node": resolved, "source": "saved_state"}, "state": state})
+    return resolved
 
 
 def _idle_state(novel_id: str = "") -> dict[str, Any]:

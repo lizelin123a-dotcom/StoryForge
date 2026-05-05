@@ -8,6 +8,16 @@ StoryForge 使用 `大版本.小功能.修复`：
 - 第二位：增加局部小功能时递增。
 - 第三位：修改小 bug 或小体验问题时递增。
 
+## 2026-05-05 · v1.0.1
+
+- 修复重启项目后仍存在待审阅节点，但内存中的守护进程不存在时，点击“通过写入/修改后通过/回滚”返回 `404 daemon is not started` 的问题。
+- 审阅接口现在会优先使用运行中的守护进程；如果项目重启导致守护进程丢失，会回退读取持久化的 daemon state，并解析其中的 `manual_review.pending`。
+- 对持久化待审节点执行通过/修改后通过时，会保存节点草稿、写入章节正文、更新 `chapter_texts/baseline_texts/progress`，并清空 pending 状态。
+- 对持久化待审节点执行回滚时，会清空 pending 状态并保留历史记录，不再要求守护进程必须正在运行。
+- 这是重启恢复场景的小修复，按版本号规则递增第三位。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml)、FastAPI 版本与页面 `APP_VERSION` 均提升至 `1.0.1`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v1.0.0
 
 - 版本号校正：此前 `v0.4.9` 与 `v0.4.10` 实际改变了写作主链路，属于底层工作流变化，应提升到 `v1.0.0`，而不是继续递增第三位。

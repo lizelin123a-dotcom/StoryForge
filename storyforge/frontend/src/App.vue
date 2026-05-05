@@ -3,12 +3,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { api, getApiBase, setApiBase, type CharacterSetting, type DaemonState, type GeneratedSettings, type NovelDetail, type NovelSummary, type SseEvent } from './api'
 import AboutPage from './components/AboutPage.vue'
 import AppSidebar from './components/AppSidebar.vue'
+import BookcasePage from './components/BookcasePage.vue'
+import ConfigPage from './components/ConfigPage.vue'
 import NoticeToast from './components/NoticeToast.vue'
 import NovelWizard from './components/NovelWizard.vue'
 import type { Chapter, RightTab, RouteName, StepState } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.3.1'
+const APP_VERSION = '0.3.2'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -430,20 +432,7 @@ onMounted(async () => {
     <main class="ml-[60px] min-h-screen">
       <NoticeToast :notice="appNotice" @close="appNotice = ''" />
 
-      <section v-if="route === 'bookcase'" class="min-h-screen p-8">
-        <header class="mb-8 flex items-end justify-between gap-4">
-          <div><h1 class="text-3xl font-semibold text-white">我的书架</h1><p class="mt-2 text-zinc-500">所有作品均来自后端 SQLite，不再使用硬编码样例。</p></div>
-          <button class="rounded-xl bg-indigo-500 px-5 py-3 text-sm font-medium text-white hover:bg-indigo-400" @click="wizardOpen = true">＋ 新建作品</button>
-        </header>
-        <div v-if="novels.length" class="grid grid-cols-3 gap-5">
-          <article v-for="novel in novels" :key="novel.id" class="group rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-5 shadow-lg shadow-black/20 hover:-translate-y-1 hover:border-indigo-500/40" @click="loadNovel(novel.id)">
-            <div class="mb-5 flex items-center gap-4"><div class="flex h-20 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/35 to-blue-500/10 text-3xl text-white">{{ novel.title.slice(0, 1) || '书' }}</div><div><h2 class="text-xl font-semibold text-white">{{ novel.title }}</h2><p class="mt-1 text-sm text-zinc-500">{{ novel.genre }}</p></div></div>
-            <div class="grid grid-cols-2 gap-3 text-sm"><span class="rounded-lg bg-[#0f0f0f] p-3 text-zinc-400">状态<br><b class="text-zinc-200">{{ novel.status }}</b></span><span class="rounded-lg bg-[#0f0f0f] p-3 text-zinc-400">字数<br><b class="text-zinc-200">{{ novel.words }} 字</b></span></div>
-            <p class="mt-4 text-xs text-zinc-600">更新：{{ novel.updated_at || '暂无' }}</p>
-          </article>
-        </div>
-        <div v-else class="rounded-3xl border border-dashed border-[#3a3a3a] bg-[#1a1a1a] p-12 text-center"><div class="text-5xl">📚</div><h2 class="mt-4 text-xl text-white">书架还没有作品</h2><p class="mt-2 text-zinc-500">点击“新建作品”，用一句话灵感生成设定并进入创作台。</p></div>
-      </section>
+      <BookcasePage v-if="route === 'bookcase'" :novels="novels" @create="wizardOpen = true" @load="loadNovel" />
 
       <section v-else-if="route === 'edit'" class="flex h-screen overflow-hidden">
         <aside class="border-r border-[#2a2a2a] bg-[#141414] transition-all duration-150" :class="leftCollapsed ? 'w-12' : 'w-[320px]'">
@@ -485,7 +474,7 @@ onMounted(async () => {
         </aside>
       </section>
 
-      <section v-else-if="route === 'config'" class="min-h-screen p-8"><header class="mb-6"><h1 class="text-2xl font-semibold text-white">配置</h1><p class="text-zinc-500">管理作品、LLM 配置与数据导出。</p></header><div class="grid grid-cols-[1fr_360px] gap-6"><div class="rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-5"><h2 class="mb-4 text-lg font-medium text-white">作品列表</h2><div class="space-y-3"><div v-for="novel in novels" :key="novel.id" class="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_120px] items-center gap-3 rounded-xl bg-[#0f0f0f] p-4 text-sm text-zinc-400"><button class="text-left text-white hover:text-indigo-300" @click="loadNovel(novel.id)">{{ novel.title }}</button><span>{{ novel.genre }}</span><span>{{ novel.status }}</span><span>{{ novel.words }} 字</span><button class="rounded-lg bg-red-500/80 px-3 py-2 text-xs text-white" @click="deleteNovel(novel.id)">删除</button></div><p v-if="!novels.length" class="text-sm text-zinc-500">暂无作品。</p></div></div><div class="space-y-6"><div class="rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-5"><h2 class="mb-4 text-lg font-medium text-white">后端连接</h2><input v-model="writingForm.backendApiBaseUrl" placeholder="后端 API Base URL" class="w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm" /></div><div class="rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-5"><h2 class="mb-4 text-lg font-medium text-white">LLM 配置</h2><div class="space-y-3"><input v-model="writingForm.apiKey" type="password" placeholder="API Key" class="w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm" /><input v-model="writingForm.apiBaseUrl" placeholder="LLM API Base URL" class="w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm" /><input v-model="writingForm.model" placeholder="模型名称" class="w-full rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-3 text-sm" /><button class="w-full rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white" @click="testConnection">测试连接</button></div></div><div class="rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-5"><h2 class="mb-4 text-lg font-medium text-white">数据管理</h2><button class="w-full rounded-xl bg-zinc-700 px-4 py-2 text-sm text-white" @click="exportAllNovels">导出作品列表</button></div></div></div></section>
+      <ConfigPage v-else-if="route === 'config'" :novels="novels" :writing-form="writingForm" @load="loadNovel" @delete="deleteNovel" @test-connection="testConnection" @export-all="exportAllNovels" />
 
       <section v-else-if="route === 'dissect'" class="min-h-screen p-8"><header class="mb-6"><h1 class="text-2xl font-semibold text-white">对标拆解</h1><p class="text-zinc-500">上传 .txt 对标书，执行三遍拆解并生成素材库。</p></header><div class="rounded-2xl border border-dashed border-[#3a3a3a] bg-[#1a1a1a] p-10 text-center" @dragover.prevent @drop.prevent="onFileSelected($event.dataTransfer?.files[0])"><div class="text-4xl">📄</div><p class="mt-3 text-zinc-300">拖拽上传或点击上传 .txt 文件</p><input type="file" accept=".txt" class="mt-4 text-sm text-zinc-500" @change="onFileSelected(($event.target as HTMLInputElement).files?.[0])" /></div><div class="mt-6 grid grid-cols-[360px_1fr] gap-6"><div class="rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-5"><h2 class="text-lg font-medium text-white">{{ uploadedFileName || dissectBook.title }}</h2><p class="mt-2 text-sm text-zinc-500">作者：{{ dissectBook.author }} · 类型：{{ dissectBook.genre }} · {{ dissectBook.wordCount }} 字</p><div class="mt-5 space-y-3"><button class="w-full rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white" @click="runStep('first')">第一遍阅读模式 · {{ steps.first }}</button><button class="w-full rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white" @click="runStep('second')">第二遍拆解模式 · {{ steps.second }}</button><button class="w-full rounded-xl bg-indigo-500 px-4 py-2 text-sm font-medium text-white" @click="runStep('third')">第三遍单元结构 · {{ steps.third }}</button></div></div><div class="rounded-2xl border border-[#2a2a2a] bg-[#1a1a1a] p-5"><div class="mb-4 flex gap-2"><button v-for="tab in ['爽点分析','节奏分析','置换表']" :key="tab" class="rounded-full border px-4 py-1.5 text-sm" :class="activeDissectTab === tab ? 'border-indigo-500/50 bg-indigo-500/20 text-white' : 'border-[#2a2a2a] text-zinc-400'" @click="activeDissectTab = tab as typeof activeDissectTab">{{ tab }}</button></div><div v-if="activeDissectTab === '爽点分析'" class="space-y-4"><div v-for="item in shuangStats" :key="item.type" class="rounded-xl bg-[#0f0f0f] p-4 text-sm text-zinc-300">{{ item.type }} · {{ item.count }}</div></div><div v-else-if="activeDissectTab === '节奏分析'" class="rounded-xl bg-[#0f0f0f] p-4 text-sm text-zinc-300">等待拆解结果。</div><div v-else class="grid grid-cols-2 gap-3"><div v-for="row in replacementRows" :key="row.group" class="rounded-xl bg-[#0f0f0f] p-4"><div class="text-sm text-indigo-300">{{ row.group }}</div><p class="mt-2 text-sm text-zinc-400">{{ row.old }} → {{ row.next }}</p></div></div></div></div></section>
 

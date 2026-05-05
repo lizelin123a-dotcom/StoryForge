@@ -1,5 +1,13 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.3.2
+
+- 继续前端组件化拆分，新增 [`BookcasePage`](storyforge/frontend/src/components/BookcasePage.vue) 与 [`ConfigPage`](storyforge/frontend/src/components/ConfigPage.vue)。
+- `App.vue` 移除书架页和配置页的大段模板，改为通过事件连接新建作品、加载作品、删除作品、测试连接与导出作品列表。
+- 保持现有书架和配置行为不变，为后续拆分对标拆解页与创作台主界面降低风险。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml) 与页面 `APP_VERSION` 均提升至 `0.3.2`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.3.1
 
 - 前端开始组件化拆分，新增 [`AppSidebar`](storyforge/frontend/src/components/AppSidebar.vue)、[`NoticeToast`](storyforge/frontend/src/components/NoticeToast.vue)、[`NovelWizard`](storyforge/frontend/src/components/NovelWizard.vue)、[`AboutPage`](storyforge/frontend/src/components/AboutPage.vue)。

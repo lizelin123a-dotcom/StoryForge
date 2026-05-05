@@ -1,6 +1,6 @@
 [project]
 name = "storyforge"
-version = "0.3.1"
+version = "0.3.2"
 description = "AI 长篇创作平台"
 requires-python = ">=3.11"
 dependencies = [

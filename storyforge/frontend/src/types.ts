@@ -14,9 +14,11 @@ export type WritingAnalysis = {
 }
 
 export type CocreationMessage = { role: 'user' | 'assistant'; content: string }
+export type EditPatch = { target: 'node' | 'chapter' | 'none'; mode: 'replace' | 'append' | 'none'; content: string; reason?: string; lock_node?: boolean }
 export type CocreationTurn = {
   reply: string
   asset_patch: Record<string, string>
+  edit_patch?: EditPatch
   next_focus: string
   ready_for_writing: boolean
   fields: { name: string; description: string }[]

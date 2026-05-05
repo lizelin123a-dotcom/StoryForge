@@ -12,10 +12,10 @@ import LeftSettingsPanel from './components/LeftSettingsPanel.vue'
 import NoticeToast from './components/NoticeToast.vue'
 import NovelWizard from './components/NovelWizard.vue'
 import RightMonitorPanel from './components/RightMonitorPanel.vue'
-import type { Chapter, CocreationMessage, CocreationTurn, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
+import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
-const APP_VERSION = '0.4.6'
+const APP_VERSION = '0.4.7'
 const navItems: { key: RouteName; icon: string; label: string }[] = [
   { key: 'bookcase', icon: '📂', label: '书架' },
   { key: 'edit', icon: '✍️', label: '创作台' },
@@ -442,6 +442,30 @@ async function sendEditorChat() {
   }
 }
 
+async function applyEditorPatch() {
+  const patch = editorChatLastTurn.value?.edit_patch as EditPatch | undefined
+  if (!patch || patch.target === 'none' || patch.mode === 'none' || !patch.content.trim()) {
+    appNotice.value = '当前没有可应用的 AI 修改。'
+    return
+  }
+  if (patch.target === 'node') {
+    if (!selectedNode.value) {
+      appNotice.value = '请先选择一个节点，再应用 AI 修改。'
+      return
+    }
+    currentNodeText.value = patch.mode === 'replace' ? patch.content : `${currentNodeText.value}${currentNodeText.value ? '\n\n' : ''}${patch.content}`
+    if (patch.lock_node && selectedNode.value) selectedNode.value.locked = true
+    await saveCurrentNode()
+    appNotice.value = patch.lock_node ? 'AI 修改已应用到当前节点并锁定。' : 'AI 修改已应用到当前节点。'
+    return
+  }
+  if (patch.target === 'chapter') {
+    currentChapterText.value = patch.mode === 'replace' ? patch.content : `${currentChapterText.value}${currentChapterText.value ? '\n\n' : ''}${patch.content}`
+    await saveCurrentChapter()
+    appNotice.value = 'AI 修改已应用到当前章节。'
+  }
+}
+
 async function createNovelFromCocreation() {
   const assets = cocreationAssets.value
   const data: GeneratedSettings = {
@@ -663,6 +687,7 @@ onMounted(async () => {
           :editor-chat-loading="editorChatLoading"
           :editor-chat-last-turn="editorChatLastTurn"
           @send-editor-chat="sendEditorChat"
+          @apply-editor-patch="applyEditorPatch"
           @start-writing="startWriting"
           @pause-writing="pauseWriting"
           @resume-writing="resumeWriting"

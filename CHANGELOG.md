@@ -1,5 +1,15 @@
 # StoryForge 更新日志
 
+## 2026-05-05 · v0.4.7
+
+- 共创/编辑对话后端返回结构新增 `edit_patch`，当作者要求改稿、补写、替换、加强爽点或加钩子时，AI 必须给出可应用到当前节点或章节的修改补丁，而不只停留在建议层。
+- `edit_patch` 支持 `target=node|chapter`、`mode=replace|append`、`content`、`reason` 与 `lock_node`，并经过后端归一化，避免前端拿到不可执行补丁。
+- 左侧创作对话面板新增“AI 可应用修改”卡片，可一键应用到当前节点或当前章节。
+- 前端应用节点补丁时会复用已有节点保存链路，自动持久化并同步章节；若 AI 建议锁定节点，会在应用后锁定。
+- 前端应用章节补丁时会复用已有章节保存链路，确保正文修改直接写入数据库与 daemon state。
+- 同步版本号：前端 [`package.json`](storyforge/frontend/package.json)、后端 [`pyproject.toml`](storyforge/pyproject.toml)、FastAPI 版本与页面 `APP_VERSION` 均提升至 `0.4.7`。
+- 验证通过：`python -m compileall -q storyforge` 与 `npm run build`。
+
 ## 2026-05-05 · v0.4.6
 
 - 新增编辑器创作对话持久化模型 `editor_chat_messages`，作品加载时恢复左侧 AI 编辑聊天记录，删除作品时同步清理。

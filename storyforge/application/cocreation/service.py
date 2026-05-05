@@ -34,6 +34,13 @@ def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets
 {{
   "reply": "给作者的自然对话回复，先简短归纳，再只问1-2个关键问题",
   "asset_patch": {{"字段名": "从本轮输入中能确认的内容"}},
+  "edit_patch": {{
+    "target": "node 或 chapter 或 none",
+    "mode": "replace 或 append 或 none",
+    "content": "如果作者要求改稿，给出可直接应用到当前节点/章节的文本；否则为空",
+    "reason": "为什么这样改",
+    "lock_node": false
+  }},
   "next_focus": "下一轮重点",
   "ready_for_writing": false
 }}
@@ -42,6 +49,7 @@ def next_cocreation_turn(*, logline: str, messages: list[dict[str, str]], assets
 1. 不要替作者拍板大量内容。
 2. 能从用户话里确认的资产才写入 asset_patch。
 2.5 如果 writing_context 有当前章节、当前节点、检测结果，请优先针对作者正在写的文本给建议。
+2.6 如果作者明确要求“改一下/替换/补一段/写入/应用/加强爽点/加钩子”等，必须给 edit_patch。target 优先 node，其次 chapter。不要只给建议。
 3. 如果七个字段已经基本完整，ready_for_writing 可以为 true。
 4. 语言像专业网文编辑，不要像表格填报。"""
     try:
@@ -63,17 +71,42 @@ def _local_turn(*, logline: str, assets: dict[str, Any], current: str, user_last
         "asset_patch": patch,
         "next_focus": current,
         "ready_for_writing": current == "写作入口",
+        "edit_patch": _local_edit_patch(user_last),
     }
 
 
 def _normalize_turn(data: dict[str, Any], current: str) -> dict[str, Any]:
     patch = data.get("asset_patch") if isinstance(data.get("asset_patch"), dict) else {}
+    edit_patch = data.get("edit_patch") if isinstance(data.get("edit_patch"), dict) else {}
+    target = str(edit_patch.get("target") or "none")
+    mode = str(edit_patch.get("mode") or "none")
+    content = str(edit_patch.get("content") or "")
+    if target not in {"node", "chapter", "none"}:
+        target = "none"
+    if mode not in {"replace", "append", "none"}:
+        mode = "none"
+    if not content.strip():
+        target = "none"
+        mode = "none"
     return {
         "reply": str(data.get("reply") or "我收到这个想法了，我们继续把它拆成可写的小说资产。"),
         "asset_patch": {str(k): str(v) for k, v in patch.items() if str(v).strip()},
+        "edit_patch": {"target": target, "mode": mode, "content": content, "reason": str(edit_patch.get("reason") or ""), "lock_node": bool(edit_patch.get("lock_node"))},
         "next_focus": str(data.get("next_focus") or current),
         "ready_for_writing": bool(data.get("ready_for_writing")),
         "fields": [{"name": name, "description": desc} for name, desc in STAGE_FIELDS],
+    }
+
+
+def _local_edit_patch(user_last: str) -> dict[str, Any]:
+    if not any(word in user_last for word in ("改", "补", "写入", "应用", "替换", "加强", "加钩子", "爽点")):
+        return {"target": "none", "mode": "none", "content": "", "reason": "", "lock_node": False}
+    return {
+        "target": "node",
+        "mode": "append",
+        "content": f"【人工思路补写】{user_last}",
+        "reason": "本地规则判断用户希望把当前想法写入正在处理的节点。",
+        "lock_node": False,
     }
 
 

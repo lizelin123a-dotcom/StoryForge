@@ -36,6 +36,7 @@ const emit = defineEmits<{
   pauseWriting: []
   resumeWriting: []
   exportText: []
+  applyEditorPatch: []
 }>()
 </script>
 
@@ -73,6 +74,12 @@ const emit = defineEmits<{
             <div class="mb-2 text-xs font-medium text-indigo-200">AI 已沉淀资产</div>
             <div class="space-y-2 text-xs leading-6 text-zinc-300">
               <p v-for="(value, key) in selectedNovel.assets" :key="key"><span class="text-zinc-500">{{ key }}：</span>{{ value }}</p>
+            </div>
+            <div v-if="editorChatLastTurn?.edit_patch?.target && editorChatLastTurn.edit_patch.target !== 'none'" class="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+              <div class="text-xs font-medium text-emerald-200">AI 可应用修改 · {{ editorChatLastTurn.edit_patch.target }} / {{ editorChatLastTurn.edit_patch.mode }}</div>
+              <p class="mt-2 line-clamp-4 whitespace-pre-wrap text-xs leading-6 text-zinc-300">{{ editorChatLastTurn.edit_patch.content }}</p>
+              <p v-if="editorChatLastTurn.edit_patch.reason" class="mt-2 text-xs text-zinc-500">{{ editorChatLastTurn.edit_patch.reason }}</p>
+              <button class="mt-2 w-full rounded-lg bg-emerald-500 px-3 py-2 text-xs font-medium text-emerald-950" @click="emit('applyEditorPatch')">应用到当前{{ editorChatLastTurn.edit_patch.target === 'node' ? '节点' : '章节' }}</button>
             </div>
             <p v-if="editorChatLastTurn" class="mt-2 border-t border-indigo-500/20 pt-2 text-xs text-indigo-200">下一轮重点：{{ editorChatLastTurn.next_focus }}</p>
           </div>

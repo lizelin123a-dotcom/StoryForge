@@ -67,6 +67,8 @@ def daemon_events() -> StreamingResponse:
 @router.post("/api/v1/daemon/start")
 def start_daemon(request: DaemonStartRequest) -> dict[str, str]:
     saved_state = load_daemon_state(request.novel_id) if request.novel_id else None
+    if saved_state is not None:
+        saved_state = _normalize_resume_state(saved_state)
     candidate = DaemonOrchestrator(
         title=request.title,
         world_setting=request.world_setting,
@@ -222,6 +224,22 @@ def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str)
     save_daemon_state(state)
     sse_manager.broadcast({"type": "node_review_resolved", "data": {"decision": decision, "node": resolved, "source": "saved_state"}, "state": state})
     return resolved
+
+
+def _normalize_resume_state(state: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(state)
+    chapter_texts = list(normalized.get("chapter_texts") or [])
+    progress = dict(normalized.get("progress") or {})
+    progress["written_chapters"] = max(int(progress.get("written_chapters") or 0), sum(1 for text in chapter_texts if str(text or "").strip()))
+    progress["total_words"] = sum(len(str(text or "")) for text in chapter_texts)
+    normalized["progress"] = progress
+    normalized["chapter_texts"] = chapter_texts
+    normalized["baseline_texts"] = list(chapter_texts)
+    manual = dict(normalized.get("manual_review") or {})
+    if not manual.get("pending"):
+        manual["decision"] = None
+    normalized["manual_review"] = manual
+    return normalized
 
 
 def _idle_state(novel_id: str = "") -> dict[str, Any]:

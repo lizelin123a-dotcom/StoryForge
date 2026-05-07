@@ -1831,3 +1831,74 @@ body {
   opacity: .28;
   cursor: not-allowed;
 }
+
+/* v3.6 right rail as pale page tabs, aligned with desk tab language */
+.notebook-workspace {
+  grid-template-columns: minmax(0, 1fr) 58px;
+}
+
+.notebook-workspace > .book-tabs {
+  margin-top: 76px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  gap: 10px;
+}
+
+.book-tabs__group {
+  gap: 7px;
+}
+
+.book-tabs__group--chapters,
+.book-tabs__group--downloads {
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(141,106,63,.12);
+}
+
+.notebook-workspace > .book-tabs .book-tab {
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+  min-height: 44px;
+  border: 1px solid rgba(141,106,63,.18);
+  border-left-color: rgba(141,106,63,.28);
+  border-radius: 0 14px 14px 0;
+  background: linear-gradient(90deg, rgba(255,253,248,.92), rgba(239,231,216,.82));
+  color: rgba(48,40,32,.78);
+  box-shadow: 5px 8px 18px rgba(55,42,28,.08);
+  font-size: .86rem;
+  transform: translateX(-8px);
+}
+
+.notebook-workspace > .book-tabs .book-tab:hover {
+  border-color: rgba(141,106,63,.28);
+  background: linear-gradient(90deg, #fffdf8, #f3ead9);
+  color: var(--mw-accent);
+  transform: translateX(-12px);
+}
+
+.notebook-workspace > .book-tabs .book-tab--active {
+  border-color: rgba(206,164,91,.58);
+  background: linear-gradient(90deg, #fffaf0, #ecd9b6);
+  color: #4b3b2c;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.52), 5px 8px 20px rgba(55,42,28,.10);
+  transform: translateX(-14px);
+}
+
+.notebook-workspace > .book-tabs .book-tab--download {
+  background: linear-gradient(90deg, rgba(250,253,246,.94), rgba(224,235,216,.86));
+  color: #536d4d;
+}
+
+.notebook-workspace > .book-tabs .book-tab--log {
+  background: linear-gradient(90deg, rgba(255,253,248,.90), rgba(232,224,211,.80));
+  color: rgba(81,66,53,.64);
+}
+
+:fullscreen .notebook-workspace {
+  grid-template-columns: minmax(0, 1fr) 62px;
+}

@@ -77,11 +77,12 @@ class DaemonOrchestrator:
         initial_state: dict[str, Any] | None,
     ) -> dict[str, Any]:
         state = deepcopy(initial_state) if initial_state else {}
-        chapter_texts = state.get("chapter_texts") or []
+        chapter_texts = list(state.get("chapter_texts") or [])
         progress = dict(state.get("progress") or {})
-        progress.setdefault("total_chapters", 0)
-        progress.setdefault("written_chapters", len(chapter_texts))
-        progress.setdefault("total_words", sum(len(str(text or "")) for text in chapter_texts))
+        persisted_written = sum(1 for text in chapter_texts if str(text or "").strip())
+        progress["written_chapters"] = max(int(progress.get("written_chapters") or 0), persisted_written)
+        progress["total_chapters"] = int(progress.get("total_chapters") or 0)
+        progress["total_words"] = sum(len(str(text or "")) for text in chapter_texts)
         progress["target_words"] = target_word_count
         manual = dict(state.get("manual_review") or {})
         manual["enabled"] = semi_auto
@@ -207,9 +208,10 @@ class DaemonOrchestrator:
                     self._wait_if_paused()
                     if self.state["status"] in {"error", "completed"}:
                         return
-                    chapter_index = int(chapter.get("chapter_index", self.state["progress"]["written_chapters"] + 1))
-                    if chapter_index <= len(self.state.get("chapter_texts") or []):
-                        continue
+                    planned_index = int(chapter.get("chapter_index", self.state["progress"]["written_chapters"] + 1))
+                    chapter_index = self._next_writable_chapter_index(planned_index)
+                    if chapter_index != planned_index:
+                        chapter = {**chapter, "chapter_index": chapter_index}
                     self._write_chapter_with_retries(act, chapter)
                     if self.state["progress"]["total_words"] >= self.target_word_count:
                         self.state["status"] = "completed"
@@ -247,7 +249,7 @@ class DaemonOrchestrator:
 
     def _write_single_chapter(self, act: dict[str, Any], chapter: dict[str, Any]) -> dict[str, Any]:
         self._wait_if_paused()
-        chapter_index = int(chapter.get("chapter_index", self.state["progress"]["written_chapters"] + 1))
+        chapter_index = self._next_writable_chapter_index(int(chapter.get("chapter_index", self.state["progress"]["written_chapters"] + 1)))
         chapter_function = str(chapter.get("core_event", "推进主线"))
         self.state["current_phase"] = "writing"
         llm = self._get_llm()
@@ -334,6 +336,11 @@ class DaemonOrchestrator:
         self._notify("chapter_reviewed", {"chapter_index": chapter_index, "review_data": review_data})
         self._notify("writing_progress", self.get_progress())
         return {"chapter_index": chapter_index, "review_data": review_data, "quality_score": quality_score}
+
+    def _next_writable_chapter_index(self, planned_index: int) -> int:
+        chapter_texts = self.state.get("chapter_texts") or []
+        first_empty = next((index + 1 for index, text in enumerate(chapter_texts) if not str(text or "").strip()), len(chapter_texts) + 1)
+        return max(planned_index, first_empty)
 
     def _get_locked_node(self, chapter_index: int, node_index: int) -> dict[str, Any] | None:
         locked_nodes = self.state.get("locked_nodes") or list_node_drafts(self.state["novel_id"], locked_only=True)

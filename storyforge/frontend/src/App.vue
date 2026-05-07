@@ -49,7 +49,7 @@ const saveLoading = ref(false)
 const daemonState = ref<DaemonState>(emptyState())
 const { events, status: sseStatus, connect } = useSSE()
 
-const settingOpen = ref(true)
+const settingOpen = ref(false)
 const activeRightTab = ref<RightTab>('检测')
 const fullAutoMode = ref(false)
 const reviewEditContent = ref('')
@@ -638,9 +638,9 @@ onMounted(async () => {
 
 <template>
   <div class="min-h-screen min-w-[1280px] bg-[var(--sf-bg)] text-[var(--sf-text)]">
-    <AppSidebar :route="route" :sse-status="sseStatus" @go="go" />
+    <AppSidebar v-if="route !== 'edit'" :route="route" :sse-status="sseStatus" @go="go" />
 
-    <main class="ml-[56px] min-h-screen overflow-hidden">
+    <main class="min-h-screen overflow-hidden" :class="route === 'edit' ? 'ml-0' : 'ml-[56px]'">
       <NoticeToast :notice="appNotice" @close="appNotice = ''" />
 
       <BookcasePage v-if="route === 'bookcase'" :novels="novels" @create="go('new-book')" @load="loadNovel" />
@@ -704,6 +704,7 @@ onMounted(async () => {
         @toggle-node-lock="toggleNodeLock"
         @review-decision="submitReviewDecision"
         @analyze-current-text="analyzeCurrentText"
+        @back-to-bookcase="go('bookcase')"
       />
 
       <ConfigPage v-else-if="route === 'config'" :novels="novels" :writing-form="writingForm" @load="loadNovel" @delete="deleteNovel" @test-connection="testConnection" @export-all="exportAllNovels" />

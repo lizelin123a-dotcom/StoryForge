@@ -79,8 +79,7 @@ class DaemonOrchestrator:
         state = deepcopy(initial_state) if initial_state else {}
         chapter_texts = list(state.get("chapter_texts") or [])
         progress = dict(state.get("progress") or {})
-        persisted_written = sum(1 for text in chapter_texts if str(text or "").strip())
-        progress["written_chapters"] = max(int(progress.get("written_chapters") or 0), persisted_written)
+        progress["written_chapters"] = min(int(progress.get("written_chapters") or 0), len(chapter_texts))
         progress["total_chapters"] = int(progress.get("total_chapters") or 0)
         progress["total_words"] = sum(len(str(text or "")) for text in chapter_texts)
         progress["target_words"] = target_word_count
@@ -208,10 +207,10 @@ class DaemonOrchestrator:
                     self._wait_if_paused()
                     if self.state["status"] in {"error", "completed"}:
                         return
-                    planned_index = int(chapter.get("chapter_index", self.state["progress"]["written_chapters"] + 1))
-                    chapter_index = self._next_writable_chapter_index(planned_index)
-                    if chapter_index != planned_index:
-                        chapter = {**chapter, "chapter_index": chapter_index}
+                    chapter_index = int(chapter.get("chapter_index", self.state["progress"]["written_chapters"] + 1))
+                    completed = int(self.state.get("progress", {}).get("written_chapters") or 0)
+                    if chapter_index <= completed:
+                        continue
                     self._write_chapter_with_retries(act, chapter)
                     if self.state["progress"]["total_words"] >= self.target_word_count:
                         self.state["status"] = "completed"
@@ -249,7 +248,7 @@ class DaemonOrchestrator:
 
     def _write_single_chapter(self, act: dict[str, Any], chapter: dict[str, Any]) -> dict[str, Any]:
         self._wait_if_paused()
-        chapter_index = self._next_writable_chapter_index(int(chapter.get("chapter_index", self.state["progress"]["written_chapters"] + 1)))
+        chapter_index = int(chapter.get("chapter_index", self.state["progress"]["written_chapters"] + 1))
         chapter_function = str(chapter.get("core_event", "推进主线"))
         self.state["current_phase"] = "writing"
         llm = self._get_llm()
@@ -279,8 +278,9 @@ class DaemonOrchestrator:
             if locked_override:
                 filled = filled.model_copy(update={"content": str(locked_override.get("content") or filled.content or "")})
                 self._notify("locked_node_applied", {"chapter_index": chapter_index, "node_index": filled.index, "node_type": filled.node_type})
-            else:
-                save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai_draft")
+                generated_nodes.append(filled)
+                continue
+            save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai_draft")
             self._notify(
                 "node_draft_generated",
                 {
@@ -337,11 +337,6 @@ class DaemonOrchestrator:
         self._notify("writing_progress", self.get_progress())
         return {"chapter_index": chapter_index, "review_data": review_data, "quality_score": quality_score}
 
-    def _next_writable_chapter_index(self, planned_index: int) -> int:
-        chapter_texts = self.state.get("chapter_texts") or []
-        first_empty = next((index + 1 for index, text in enumerate(chapter_texts) if not str(text or "").strip()), len(chapter_texts) + 1)
-        return max(planned_index, first_empty)
-
     def _get_locked_node(self, chapter_index: int, node_index: int) -> dict[str, Any] | None:
         locked_nodes = self.state.get("locked_nodes") or list_node_drafts(self.state["novel_id"], locked_only=True)
         self.state["locked_nodes"] = locked_nodes
@@ -354,7 +349,7 @@ class DaemonOrchestrator:
         while len(self.state["chapter_texts"]) < chapter_index:
             self.state["chapter_texts"].append("")
         existing = str(self.state["chapter_texts"][chapter_index - 1] or "")
-        committed_text = existing or chapter_text
+        committed_text = chapter_text if len(chapter_text.strip()) >= len(existing.strip()) else existing
         self.state["chapter_texts"][chapter_index - 1] = committed_text
         self.state["baseline_texts"] = list(self.state["chapter_texts"])
         self.state["chapter_summaries"].append(str(review_data.get("chapter_summary", "")))

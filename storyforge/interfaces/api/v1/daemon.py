@@ -230,7 +230,7 @@ def _normalize_resume_state(state: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(state)
     chapter_texts = list(normalized.get("chapter_texts") or [])
     progress = dict(normalized.get("progress") or {})
-    progress["written_chapters"] = max(int(progress.get("written_chapters") or 0), sum(1 for text in chapter_texts if str(text or "").strip()))
+    progress["written_chapters"] = min(int(progress.get("written_chapters") or 0), len(chapter_texts))
     progress["total_words"] = sum(len(str(text or "")) for text in chapter_texts)
     normalized["progress"] = progress
     normalized["chapter_texts"] = chapter_texts

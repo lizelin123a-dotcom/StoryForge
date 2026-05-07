@@ -214,6 +214,10 @@ function normalizeNodeDrafts(rows: unknown[]): NodeDraft[] {
     content: String(row.content || ''),
     locked: Boolean(row.locked),
     source: String(row.source || 'ai'),
+    status: String(row.status || (row.locked ? 'approved' : 'drafted')),
+    appended_to_chapter: Boolean(row.appended_to_chapter),
+    target_words: Number(row.target_words || 0),
+    actual_words: Number(row.actual_words || String(row.content || '').length),
     updated_at: String(row.updated_at || ''),
   }))
 }

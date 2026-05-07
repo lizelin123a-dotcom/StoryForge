@@ -60,6 +60,10 @@ def _migrate_sqlite_node_drafts_table() -> None:
     existing_columns = {column["name"] for column in inspector.get_columns("node_drafts")}
     migrations: Iterable[tuple[str, str]] = (
         ("source", "ALTER TABLE node_drafts ADD COLUMN source VARCHAR DEFAULT 'ai'"),
+        ("status", "ALTER TABLE node_drafts ADD COLUMN status VARCHAR DEFAULT 'drafted'"),
+        ("appended_to_chapter", "ALTER TABLE node_drafts ADD COLUMN appended_to_chapter INTEGER DEFAULT 0"),
+        ("target_words", "ALTER TABLE node_drafts ADD COLUMN target_words INTEGER DEFAULT 0"),
+        ("actual_words", "ALTER TABLE node_drafts ADD COLUMN actual_words INTEGER DEFAULT 0"),
     )
     with engine.begin() as connection:
         for column_name, statement in migrations:

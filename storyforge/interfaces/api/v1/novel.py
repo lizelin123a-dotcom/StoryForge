@@ -46,6 +46,9 @@ class NodeDraftSaveRequest(BaseModel):
     locked: bool = False
     source: str = "manual"
     sync_chapter: bool = False
+    status: str = ""
+    appended_to_chapter: bool = False
+    target_words: int = 0
 
 
 class NovelAssetsSaveRequest(BaseModel):
@@ -115,7 +118,7 @@ def novel_nodes(novel_id: str) -> dict[str, Any]:
 def novel_save_node(novel_id: str, request: NodeDraftSaveRequest) -> dict[str, Any]:
     if get_novel(novel_id) is None:
         raise HTTPException(status_code=404, detail="novel not found")
-    return save_node_draft(novel_id, request.chapter_index, request.node_index, request.node_type, request.content, request.locked, request.source, request.sync_chapter)
+    return save_node_draft(novel_id, request.chapter_index, request.node_index, request.node_type, request.content, request.locked, request.source, request.sync_chapter, request.status, request.appended_to_chapter, request.target_words)
 
 
 @router.get("/api/v1/novel/{novel_id}/editor-chat")

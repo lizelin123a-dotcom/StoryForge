@@ -156,20 +156,26 @@ def list_node_drafts(novel_id: str, locked_only: bool = False) -> list[dict[str,
         return [_node_draft_from_model(row) for row in rows]
 
 
-def save_node_draft(novel_id: str, chapter_index: int, node_index: int, node_type: str, content: str, locked: bool = False, source: str = "manual", sync_chapter: bool = False) -> dict[str, Any]:
+def save_node_draft(novel_id: str, chapter_index: int, node_index: int, node_type: str, content: str, locked: bool = False, source: str = "manual", sync_chapter: bool = False, status: str = "", appended_to_chapter: bool = False, target_words: int = 0) -> dict[str, Any]:
     init_db()
     draft_id = f"{novel_id}:chapter:{chapter_index}:node:{node_index}"
     now = datetime.utcnow()
     with SessionLocal() as session:
         draft = session.get(NodeDraftModel, draft_id)
+        actual_words = len(content or "")
         if draft is None:
-            draft = NodeDraftModel(id=draft_id, novel_id=novel_id, chapter_index=chapter_index, node_index=node_index, node_type=node_type, content=content, locked=1 if locked else 0, source=source, created_at=now, updated_at=now)
+            draft = NodeDraftModel(id=draft_id, novel_id=novel_id, chapter_index=chapter_index, node_index=node_index, node_type=node_type, content=content, locked=1 if locked else 0, source=source, status=status or ("approved" if locked else "drafted"), appended_to_chapter=1 if appended_to_chapter else 0, target_words=int(target_words or 0), actual_words=actual_words, created_at=now, updated_at=now)
             session.add(draft)
         else:
             draft.node_type = node_type or draft.node_type
             draft.content = content
             draft.locked = 1 if locked else 0
             draft.source = source or draft.source
+            draft.status = status or ("approved" if locked else draft.status or "drafted")
+            draft.appended_to_chapter = 1 if appended_to_chapter else draft.appended_to_chapter
+            if target_words:
+                draft.target_words = int(target_words)
+            draft.actual_words = actual_words
             draft.updated_at = now
         if sync_chapter:
             _rebuild_chapter_from_nodes(session, novel_id, chapter_index)
@@ -282,6 +288,10 @@ def _node_draft_from_model(row: NodeDraftModel) -> dict[str, Any]:
         "content": row.content or "",
         "locked": bool(row.locked),
         "source": row.source,
+        "status": row.status or ("approved" if row.locked else "drafted"),
+        "appended_to_chapter": bool(row.appended_to_chapter),
+        "target_words": int(row.target_words or 0),
+        "actual_words": int(row.actual_words or len(row.content or "")),
         "updated_at": _format_time(row.updated_at),
     }
 

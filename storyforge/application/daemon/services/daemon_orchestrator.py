@@ -300,7 +300,7 @@ class DaemonOrchestrator:
                 self._notify("locked_node_applied", {"chapter_index": chapter_index, "node_index": filled.index, "node_type": filled.node_type})
                 generated_nodes.append(filled)
                 continue
-            save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai_draft")
+            save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai_draft", status="drafted", target_words=int(getattr(node, "expected_word_count", 0) or 0))
             self._notify(
                 "node_draft_generated",
                 {
@@ -456,7 +456,7 @@ class DaemonOrchestrator:
             return None
         if decision.get("content") is not None:
             content = str(decision.get("content") or "")
-            save_node_draft(self.state["novel_id"], chapter_index, node.index, node.node_type, content, locked=True, source="manual_review", sync_chapter=False)
+            save_node_draft(self.state["novel_id"], chapter_index, node.index, node.node_type, content, locked=True, source="manual_review", sync_chapter=False, status="approved", appended_to_chapter=True, target_words=int(getattr(node, "expected_word_count", 0) or 0))
             existing_texts = self.state.setdefault("chapter_texts", [])
             while len(existing_texts) < chapter_index:
                 existing_texts.append("")

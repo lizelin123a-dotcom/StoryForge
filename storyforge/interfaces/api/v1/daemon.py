@@ -206,7 +206,7 @@ def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str)
     node_type = str(resolved.get("node_type") or "节点")
     content = str(resolved.get("content") or "")
     if decision != "rolled_back" and novel_id and content:
-        save_node_draft(novel_id, chapter_index, node_index, node_type, content, locked=True, source="manual_review", sync_chapter=False)
+        save_node_draft(novel_id, chapter_index, node_index, node_type, content, locked=True, source="manual_review", sync_chapter=False, status="approved", appended_to_chapter=True)
         chapter_texts = list(state.get("chapter_texts") or [])
         while len(chapter_texts) < chapter_index:
             chapter_texts.append("")

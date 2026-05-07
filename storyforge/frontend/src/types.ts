@@ -3,7 +3,7 @@ export type StepState = '待执行' | '执行中' | '已完成' | '失败'
 export type Chapter = { title: string; content: string; nodeLabel: string; nodesDone: number; nodesTotal: number; dirty?: boolean }
 export type NodeDraft = { id: string; chapter_index: number; node_index: number; node_type: string; content: string; locked: boolean; source: string; status?: string; appended_to_chapter?: boolean; target_words?: number; actual_words?: number; updated_at?: string }
 export type RightTab = '检测' | '监控' | '审阅' | '生成逻辑' | '事件'
-export type WritingCard = { chapter_index: number; node_index: number; nodes_total: number; completed_nodes: number[]; status: string; chapter_title: string; next_step: string }
+export type WritingCard = { chapter_index: number; node_index: number; nodes_total?: number; planned_nodes?: number; completed_nodes: number[]; status: string; chapter_title: string; next_step: string }
 
 export type WritingSignal = { name: string; score: number; hits: string[]; status: string }
 export type WritingAnalysis = {

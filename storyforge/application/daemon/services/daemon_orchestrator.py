@@ -96,7 +96,7 @@ class DaemonOrchestrator:
         writing_card = dict(state.get("writing_card") or {})
         writing_card.setdefault("chapter_index", max(1, int(progress.get("written_chapters") or 0) + 1))
         writing_card.setdefault("node_index", 1)
-        writing_card.setdefault("nodes_total", 0)
+        writing_card.setdefault("planned_nodes", writing_card.get("nodes_total", 0))
         writing_card.setdefault("completed_nodes", [])
         writing_card.setdefault("status", "idle")
         writing_card.setdefault("chapter_title", f"第 {writing_card.get('chapter_index', 1)} 章")
@@ -369,11 +369,11 @@ class DaemonOrchestrator:
                 return node.index
         return nodes[-1].index if nodes else 1
 
-    def _update_writing_card(self, chapter_index: int, node_index: int, nodes_total: int, completed_nodes: list[int], status: str, next_step: str, chapter_title: str = "") -> None:
+    def _update_writing_card(self, chapter_index: int, node_index: int, planned_nodes: int, completed_nodes: list[int], status: str, next_step: str, chapter_title: str = "") -> None:
         self.state["writing_card"] = {
             "chapter_index": chapter_index,
             "node_index": node_index,
-            "nodes_total": nodes_total,
+            "planned_nodes": planned_nodes,
             "completed_nodes": completed_nodes,
             "status": status,
             "chapter_title": chapter_title or f"第 {chapter_index} 章",
@@ -430,7 +430,7 @@ class DaemonOrchestrator:
             score -= 10
         return min(max(score, 0), 100)
 
-    def _wait_for_node_review(self, chapter_index: int, node: ChapterNode, nodes_total: int, chapter_title: str) -> ChapterNode | None:
+    def _wait_for_node_review(self, chapter_index: int, node: ChapterNode, planned_nodes: int, chapter_title: str) -> ChapterNode | None:
         manual = self.state.setdefault("manual_review", {"enabled": False, "pending": None, "history": [], "instructions": "", "decision": None})
         if not manual.get("enabled"):
             manual["pending"] = None
@@ -446,7 +446,7 @@ class DaemonOrchestrator:
             "reader_expectation": node.reader_expectation,
             "content": node.content or "",
         }
-        self._update_writing_card(chapter_index, node.index, nodes_total, self._approved_node_indexes(chapter_index), "node_review", f"第 {node.index} 节等待审阅", chapter_title)
+        self._update_writing_card(chapter_index, node.index, planned_nodes, self._approved_node_indexes(chapter_index), "node_review", f"第 {node.index} 节等待审阅", chapter_title)
         self._notify("node_review_required", dict(manual["pending"]))
         while manual.get("pending") and self.state.get("status") == "running" and manual.get("enabled"):
             time.sleep(0.5)
@@ -468,8 +468,8 @@ class DaemonOrchestrator:
             completed_nodes = self._approved_node_indexes(chapter_index)
             if node.index not in completed_nodes:
                 completed_nodes = sorted([*completed_nodes, node.index])
-            next_index = min(node.index + 1, nodes_total or node.index + 1)
-            self._update_writing_card(chapter_index, next_index, nodes_total, completed_nodes, "node_approved", f"第 {node.index} 节已写入正文", chapter_title)
+            next_index = min(node.index + 1, planned_nodes or node.index + 1)
+            self._update_writing_card(chapter_index, next_index, planned_nodes, completed_nodes, "node_approved", f"第 {node.index} 节已写入正文，可继续增删调整小节", chapter_title)
             return node.model_copy(update={"content": content})
         return node
 

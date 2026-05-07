@@ -1979,3 +1979,67 @@ body {
   font-size: .82rem;
   line-height: 1.55;
 }
+
+/* v3.8 compact elastic progress slip */
+.writing-progress-card {
+  margin: 10px 14px 0;
+  padding: 8px 10px;
+  border-radius: 14px;
+}
+
+.writing-progress-card__summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.writing-progress-card__summary strong {
+  overflow: hidden;
+  color: var(--mw-ink-soft);
+  font-size: .82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.writing-progress-card__summary em {
+  border-radius: 999px;
+  background: rgba(111,143,104,.12);
+  color: #5f7a58;
+  font-size: .68rem;
+  font-style: normal;
+  font-weight: 900;
+  padding: .12rem .42rem;
+}
+
+.writing-progress-card__kicker {
+  margin: 0;
+  font-size: .62rem;
+  letter-spacing: .1em;
+  white-space: nowrap;
+}
+
+.writing-progress-card__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+  color: var(--mw-ink-muted);
+  font-size: .7rem;
+}
+
+.writing-progress-card__dots {
+  margin: 7px 0 0;
+}
+
+.writing-progress-card__detail {
+  margin-top: 7px !important;
+  border-top: 1px solid rgba(111,143,104,.14);
+  padding-top: 7px;
+}

@@ -242,7 +242,7 @@ def _normalize_resume_state(state: dict[str, Any]) -> dict[str, Any]:
     card = dict(normalized.get("writing_card") or {})
     card.setdefault("chapter_index", max(1, int(progress.get("written_chapters") or 0) + 1))
     card.setdefault("node_index", 1)
-    card.setdefault("nodes_total", 0)
+    card.setdefault("planned_nodes", card.get("nodes_total", 0))
     card.setdefault("completed_nodes", [])
     card.setdefault("status", "idle")
     card.setdefault("chapter_title", f"第 {card.get('chapter_index', 1)} 章")
@@ -272,7 +272,7 @@ def _idle_state(novel_id: str = "") -> dict[str, Any]:
         "quality_threshold": 50,
         "llm_config": {"api_key": "", "api_base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat"},
         "manual_review": {"enabled": False, "pending": None, "history": [], "instructions": "", "decision": None},
-        "writing_card": {"chapter_index": 1, "node_index": 1, "nodes_total": 0, "completed_nodes": [], "status": "idle", "chapter_title": "第 1 章", "next_step": "等待开始写作"},
+        "writing_card": {"chapter_index": 1, "node_index": 1, "planned_nodes": 0, "completed_nodes": [], "status": "idle", "chapter_title": "第 1 章", "next_step": "等待开始写作"},
         "runtime_memory": {"chapter_summaries": [], "hooks": [], "facts": []},
         "runtime_state_deltas": [],
         "hook_health_records": [],

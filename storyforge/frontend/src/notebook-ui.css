@@ -1699,3 +1699,63 @@ body {
   height: 26px;
   font-size: .72rem;
 }
+
+/* v3.4 interaction-state cleanup and stable tab rail */
+.workspace-tool:disabled {
+  opacity: .28;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.workspace-tool:disabled:hover {
+  border-color: transparent;
+  background: transparent;
+  color: rgba(81,66,53,.54);
+}
+
+.review-inline-meta--draft .review-inline-kicker {
+  background: rgba(111,143,104,.10);
+  color: #5f7a58;
+}
+
+.notebook-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.notebook-spread {
+  grid-column: 1;
+  width: 100%;
+  max-width: none;
+}
+
+.notebook-workspace > .book-tabs {
+  grid-column: 2;
+  position: static !important;
+  z-index: 70;
+  align-self: start;
+  margin-top: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notebook-workspace > .book-tabs .book-tab {
+  min-width: 36px;
+  max-width: 40px;
+  min-height: 48px;
+}
+
+:fullscreen .notebook-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  gap: 10px;
+}
+
+:fullscreen .notebook-workspace > .book-tabs {
+  display: flex;
+  position: static !important;
+  right: auto;
+}

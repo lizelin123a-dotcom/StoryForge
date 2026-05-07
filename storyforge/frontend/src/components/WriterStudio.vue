@@ -91,6 +91,9 @@ const assetEntries = computed(() => Object.entries(props.selectedNovel?.assets |
 
 <template>
   <NotebookSpread
+    :daemon-status="daemonState.status"
+    :save-loading="saveLoading"
+    :has-novel="Boolean(selectedNovel)"
     @back="emit('backToBookcase')"
     @start-writing="emit('startWriting')"
     @pause-writing="emit('pauseWriting')"
@@ -143,12 +146,14 @@ const assetEntries = computed(() => Object.entries(props.selectedNovel?.assets |
       @toggle="emit('update:settingOpen', !settingOpen)"
     />
 
-    <PageTabs
-      :chapters="chapters"
-      :active-chapter="activeChapter"
-      @update:active-chapter="emit('update:activeChapter', $event)"
-      @toggle-debug="debugOpen = !debugOpen"
-    />
+    <template #tabs>
+      <PageTabs
+        :chapters="chapters"
+        :active-chapter="activeChapter"
+        @update:active-chapter="emit('update:activeChapter', $event)"
+        @toggle-debug="debugOpen = !debugOpen"
+      />
+    </template>
 
     <template #debug>
       <DebugDrawer

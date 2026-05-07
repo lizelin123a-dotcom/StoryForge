@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import type { CocreationMessage, CocreationTurn, EditorSkill } from '../../types'
 
-defineProps<{
+const props = defineProps<{
   editorChatInput: string
   editorChatMessages: CocreationMessage[]
   editorChatLoading: boolean
@@ -19,11 +19,26 @@ const emit = defineEmits<{
 }>()
 
 const toolsOpen = ref(false)
+const threadRef = ref<HTMLElement | null>(null)
+
+async function scrollToBottom() {
+  await nextTick()
+  if (!threadRef.value) return
+  threadRef.value.scrollTo({ top: threadRef.value.scrollHeight, behavior: 'smooth' })
+}
+
+function sendMessage() {
+  toolsOpen.value = false
+  emit('sendEditorChat')
+}
+
+watch(() => props.editorChatMessages.length, scrollToBottom)
+watch(() => props.editorChatLoading, scrollToBottom)
 </script>
 
 <template>
   <section class="ai-paper chat-workbench">
-    <div class="chat-thread">
+    <div ref="threadRef" class="chat-thread">
       <div v-if="!editorChatMessages.length" class="chat-empty">
         <strong>开始和 AI 聊聊这一章。</strong>
         <span>可以直接说：这一章怎么推进？这个节点哪里弱？能不能加一个反转？</span>
@@ -66,9 +81,9 @@ const toolsOpen = ref(false)
         rows="1"
         placeholder="输入消息，Ctrl+Enter 发送"
         @input="emit('update:editorChatInput', ($event.target as HTMLTextAreaElement).value)"
-        @keydown.ctrl.enter.prevent="emit('sendEditorChat')"
+        @keydown.ctrl.enter.prevent="sendMessage"
       />
-      <button class="chat-send" :disabled="editorChatLoading || !editorChatInput.trim()" @click="emit('sendEditorChat')">
+      <button class="chat-send" :disabled="editorChatLoading || !editorChatInput.trim()" @click="sendMessage">
         {{ editorChatLoading ? '...' : '发送' }}
       </button>
     </div>

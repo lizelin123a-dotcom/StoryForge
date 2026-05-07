@@ -215,9 +215,13 @@ def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str)
         state["chapter_texts"] = chapter_texts
         state["baseline_texts"] = chapter_texts
         progress = dict(state.get("progress") or {})
-        progress["written_chapters"] = max(int(progress.get("written_chapters") or 0), chapter_index)
+        progress["written_chapters"] = min(int(progress.get("written_chapters") or 0), len(chapter_texts))
         progress["total_words"] = sum(len(str(text or "")) for text in chapter_texts)
         state["progress"] = progress
+        card = dict(state.get("writing_card") or {})
+        completed = sorted(set([*(card.get("completed_nodes") or []), node_index]))
+        card.update({"chapter_index": chapter_index, "node_index": node_index + 1, "completed_nodes": completed, "status": "node_approved", "next_step": f"第 {node_index} 节已写入正文"})
+        state["writing_card"] = card
         save_chapter_text(novel_id, chapter_index, chapter_texts[chapter_index - 1])
     state["status"] = "paused"
     state["current_phase"] = "reviewing"
@@ -235,6 +239,15 @@ def _normalize_resume_state(state: dict[str, Any]) -> dict[str, Any]:
     normalized["progress"] = progress
     normalized["chapter_texts"] = chapter_texts
     normalized["baseline_texts"] = list(chapter_texts)
+    card = dict(normalized.get("writing_card") or {})
+    card.setdefault("chapter_index", max(1, int(progress.get("written_chapters") or 0) + 1))
+    card.setdefault("node_index", 1)
+    card.setdefault("nodes_total", 0)
+    card.setdefault("completed_nodes", [])
+    card.setdefault("status", "idle")
+    card.setdefault("chapter_title", f"第 {card.get('chapter_index', 1)} 章")
+    card.setdefault("next_step", "等待开始写作")
+    normalized["writing_card"] = card
     manual = dict(normalized.get("manual_review") or {})
     if not manual.get("pending"):
         manual["decision"] = None
@@ -259,6 +272,7 @@ def _idle_state(novel_id: str = "") -> dict[str, Any]:
         "quality_threshold": 50,
         "llm_config": {"api_key": "", "api_base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat"},
         "manual_review": {"enabled": False, "pending": None, "history": [], "instructions": "", "decision": None},
+        "writing_card": {"chapter_index": 1, "node_index": 1, "nodes_total": 0, "completed_nodes": [], "status": "idle", "chapter_title": "第 1 章", "next_step": "等待开始写作"},
         "runtime_memory": {"chapter_summaries": [], "hooks": [], "facts": []},
         "runtime_state_deltas": [],
         "hook_health_records": [],

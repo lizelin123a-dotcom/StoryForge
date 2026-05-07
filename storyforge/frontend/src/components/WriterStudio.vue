@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { CocreationMessage, CocreationTurn, EditorSkill, NodeDraft, RightTab, WritingAnalysis } from '../types'
+import type { CocreationMessage, CocreationTurn, EditorSkill, NodeDraft, RightTab, WritingAnalysis, WritingCard } from '../types'
 import type { DaemonState, NovelDetail, SseEvent } from '../api'
 import DebugDrawer from './notebook/DebugDrawer.vue'
 import DeskNotesPanel from './notebook/DeskNotesPanel.vue'
@@ -9,6 +9,7 @@ import ManuscriptPage from './notebook/ManuscriptPage.vue'
 import NotebookPage from './notebook/NotebookPage.vue'
 import NotebookSpread from './notebook/NotebookSpread.vue'
 import PageTabs from './notebook/PageTabs.vue'
+import WritingProgressCard from './notebook/WritingProgressCard.vue'
 
 const props = defineProps<{
   settingOpen: boolean
@@ -88,6 +89,7 @@ const debugOpen = ref(false)
 const selectedNode = computed(() => props.nodeDrafts.find((node) => node.id === props.selectedNodeId) || null)
 const hasPendingReview = computed(() => Boolean(props.pendingNode))
 const assetEntries = computed(() => Object.entries(props.selectedNovel?.assets || {}))
+const writingCard = computed(() => (props.daemonState.writing_card as WritingCard | undefined) || null)
 </script>
 
 <template>
@@ -102,6 +104,7 @@ const assetEntries = computed(() => Object.entries(props.selectedNovel?.assets |
     @save-chapter="emit('saveChapter')"
   >
     <NotebookPage side="left" class-name="writing-left-page">
+      <WritingProgressCard :card="writingCard" />
       <EditorChatPanel
         :editor-chat-input="editorChatInput"
         :editor-chat-messages="editorChatMessages"

@@ -93,6 +93,14 @@ class DaemonOrchestrator:
             manual["instructions"] = ""
         manual.setdefault("history", [])
         manual.setdefault("decision", None)
+        writing_card = dict(state.get("writing_card") or {})
+        writing_card.setdefault("chapter_index", max(1, int(progress.get("written_chapters") or 0) + 1))
+        writing_card.setdefault("node_index", 1)
+        writing_card.setdefault("nodes_total", 0)
+        writing_card.setdefault("completed_nodes", [])
+        writing_card.setdefault("status", "idle")
+        writing_card.setdefault("chapter_title", f"第 {writing_card.get('chapter_index', 1)} 章")
+        writing_card.setdefault("next_step", "等待开始写作")
         state.update(
             {
                 "novel_id": novel_id,
@@ -115,6 +123,7 @@ class DaemonOrchestrator:
                 "hook_health_records": state.get("hook_health_records") or [],
                 "novel_assets": state.get("novel_assets") or get_novel_assets(novel_id),
                 "locked_nodes": state.get("locked_nodes") or list_node_drafts(novel_id, locked_only=True),
+                "writing_card": writing_card,
             }
         )
         return state
@@ -251,13 +260,24 @@ class DaemonOrchestrator:
         chapter_index = int(chapter.get("chapter_index", self.state["progress"]["written_chapters"] + 1))
         chapter_function = str(chapter.get("core_event", "推进主线"))
         self.state["current_phase"] = "writing"
+        self._update_writing_card(chapter_index, 1, 0, [], "chapter_planning", "正在拆分本章小节", chapter_function)
         llm = self._get_llm()
         nodes = generate_chapter_outline(act, chapter_index, chapter_function, llm=llm)
+        existing_completed = self._approved_node_indexes(chapter_index)
+        next_node = self._next_node_index(nodes, existing_completed)
+        self._update_writing_card(chapter_index, next_node, len(nodes), existing_completed, "writing", f"准备生成第 {next_node} 节", chapter_function)
         self._notify("outline_ready", {"chapter_index": chapter_index, "nodes": [node.model_dump() for node in nodes]})
 
         generated_nodes: list[ChapterNode] = []
         for node in nodes:
             self._wait_if_paused()
+            completed_nodes = self._approved_node_indexes(chapter_index)
+            if node.index in completed_nodes:
+                locked_node = self._get_locked_node(chapter_index, node.index)
+                if locked_node:
+                    generated_nodes.append(node.model_copy(update={"content": str(locked_node.get("content") or "")}))
+                continue
+            self._update_writing_card(chapter_index, node.index, len(nodes), completed_nodes, "node_writing", f"正在写第 {node.index} 节", chapter_function)
             context = build_governed_context(
                 chapter_index=chapter_index,
                 story_bible={"world_setting": self.world_setting, "characters": self.characters, "genre": self.genre},
@@ -291,7 +311,7 @@ class DaemonOrchestrator:
                     "generation_logic": self._build_generation_logic(node, questions, context),
                 },
             )
-            filled = self._wait_for_node_review(chapter_index, filled)
+            filled = self._wait_for_node_review(chapter_index, filled, len(nodes), chapter_function)
             if filled is None:
                 continue
             generated_nodes.append(filled)
@@ -311,6 +331,7 @@ class DaemonOrchestrator:
         chapter_text = "\n\n".join(node.content or "" for node in generated_nodes)
 
         self.state["current_phase"] = "reviewing"
+        self._update_writing_card(chapter_index, len(nodes), len(nodes), self._approved_node_indexes(chapter_index), "chapter_review", "正在做章末检查", chapter_function)
         review_data = review_chapter(
             novel_id=self.state["novel_id"],
             chapter_index=chapter_index,
@@ -337,6 +358,28 @@ class DaemonOrchestrator:
         self._notify("writing_progress", self.get_progress())
         return {"chapter_index": chapter_index, "review_data": review_data, "quality_score": quality_score}
 
+    def _approved_node_indexes(self, chapter_index: int) -> list[int]:
+        locked_nodes = self.state.get("locked_nodes") or list_node_drafts(self.state["novel_id"], locked_only=True)
+        self.state["locked_nodes"] = locked_nodes
+        return sorted({int(node.get("node_index") or 0) for node in locked_nodes if int(node.get("chapter_index") or 0) == chapter_index and node.get("locked")})
+
+    def _next_node_index(self, nodes: list[ChapterNode], completed_nodes: list[int]) -> int:
+        for node in nodes:
+            if node.index not in completed_nodes:
+                return node.index
+        return nodes[-1].index if nodes else 1
+
+    def _update_writing_card(self, chapter_index: int, node_index: int, nodes_total: int, completed_nodes: list[int], status: str, next_step: str, chapter_title: str = "") -> None:
+        self.state["writing_card"] = {
+            "chapter_index": chapter_index,
+            "node_index": node_index,
+            "nodes_total": nodes_total,
+            "completed_nodes": completed_nodes,
+            "status": status,
+            "chapter_title": chapter_title or f"第 {chapter_index} 章",
+            "next_step": next_step,
+        }
+
     def _get_locked_node(self, chapter_index: int, node_index: int) -> dict[str, Any] | None:
         locked_nodes = self.state.get("locked_nodes") or list_node_drafts(self.state["novel_id"], locked_only=True)
         self.state["locked_nodes"] = locked_nodes
@@ -362,6 +405,7 @@ class DaemonOrchestrator:
         }
         self.state["progress"]["written_chapters"] = max(int(self.state["progress"].get("written_chapters") or 0), chapter_index)
         self.state["progress"]["total_words"] = sum(len(str(text or "")) for text in self.state["chapter_texts"])
+        self._update_writing_card(chapter_index + 1, 1, 0, [], "chapter_completed", f"第 {chapter_index} 章已归档，准备下一章", f"第 {chapter_index} 章")
         save_chapter_text(self.state["novel_id"], chapter_index, committed_text)
 
     def _calculate_quality_score(self, review_data: dict[str, Any]) -> int:
@@ -386,7 +430,7 @@ class DaemonOrchestrator:
             score -= 10
         return min(max(score, 0), 100)
 
-    def _wait_for_node_review(self, chapter_index: int, node: ChapterNode) -> ChapterNode | None:
+    def _wait_for_node_review(self, chapter_index: int, node: ChapterNode, nodes_total: int, chapter_title: str) -> ChapterNode | None:
         manual = self.state.setdefault("manual_review", {"enabled": False, "pending": None, "history": [], "instructions": "", "decision": None})
         if not manual.get("enabled"):
             manual["pending"] = None
@@ -402,6 +446,7 @@ class DaemonOrchestrator:
             "reader_expectation": node.reader_expectation,
             "content": node.content or "",
         }
+        self._update_writing_card(chapter_index, node.index, nodes_total, self._approved_node_indexes(chapter_index), "node_review", f"第 {node.index} 节等待审阅", chapter_title)
         self._notify("node_review_required", dict(manual["pending"]))
         while manual.get("pending") and self.state.get("status") == "running" and manual.get("enabled"):
             time.sleep(0.5)
@@ -420,6 +465,11 @@ class DaemonOrchestrator:
             self.state["baseline_texts"] = list(existing_texts)
             self.state["progress"]["total_words"] = sum(len(str(text or "")) for text in existing_texts)
             save_chapter_text(self.state["novel_id"], chapter_index, existing_texts[chapter_index - 1])
+            completed_nodes = self._approved_node_indexes(chapter_index)
+            if node.index not in completed_nodes:
+                completed_nodes = sorted([*completed_nodes, node.index])
+            next_index = min(node.index + 1, nodes_total or node.index + 1)
+            self._update_writing_card(chapter_index, next_index, nodes_total, completed_nodes, "node_approved", f"第 {node.index} 节已写入正文", chapter_title)
             return node.model_copy(update={"content": content})
         return node
 

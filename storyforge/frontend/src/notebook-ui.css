@@ -1902,3 +1902,80 @@ body {
 :fullscreen .notebook-workspace {
   grid-template-columns: minmax(0, 1fr) 62px;
 }
+
+/* v3.7 author-facing writing progress card */
+.writing-progress-card {
+  flex: 0 0 auto;
+  margin: 14px 14px 0;
+  border: 1px solid rgba(111,143,104,.18);
+  border-radius: 18px;
+  background: rgba(250,253,246,.72);
+  box-shadow: 0 8px 22px rgba(55,42,28,.06);
+  padding: 12px 14px;
+  color: var(--mw-ink-soft);
+}
+
+.writing-progress-card__kicker {
+  margin: 0 0 6px;
+  color: #6f8f68;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .16em;
+}
+
+.writing-progress-card__main,
+.writing-progress-card__node {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.writing-progress-card__main strong {
+  color: var(--mw-ink);
+  font-size: 1rem;
+}
+
+.writing-progress-card__main span,
+.writing-progress-card__node span {
+  color: #6f8067;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.writing-progress-card__node {
+  margin-top: 6px;
+}
+
+.writing-progress-card__node strong {
+  color: var(--mw-accent);
+  font-size: .92rem;
+}
+
+.writing-progress-card__dots {
+  display: flex;
+  gap: 5px;
+  margin: 9px 0 8px;
+}
+
+.writing-progress-card__dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(81,66,53,.16);
+}
+
+.writing-progress-card__dots i.done {
+  background: #7fa174;
+}
+
+.writing-progress-card__dots i.current {
+  box-shadow: 0 0 0 3px rgba(127,161,116,.16);
+}
+
+.writing-progress-card p:last-child {
+  margin: 0;
+  color: var(--mw-ink-muted);
+  font-size: .82rem;
+  line-height: 1.55;
+}

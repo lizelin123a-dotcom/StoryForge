@@ -36,7 +36,7 @@ const emit = defineEmits<{
       <div class="review-actions">
         <button class="sf-btn sf-btn--success review-actions__primary" @click="emit('reviewDecision', 'approve')">写入</button>
         <button class="sf-btn sf-btn--warning" @click="emit('reviewDecision', 'rewrite')">改后写入</button>
-        <button class="sf-btn sf-btn--danger" @click="emit('reviewDecision', 'rollback')">回滚</button>
+        <button class="sf-btn sf-btn--danger" @click="emit('reviewDecision', 'rollback')">换一版</button>
         <button v-if="selectedNode" class="sf-btn sf-btn--ghost" @click="emit('toggleNodeLock', selectedNode)">{{ selectedNode.locked ? '解锁' : '锁定' }}</button>
         <button class="sf-btn sf-btn--ghost" :disabled="!selectedNodeId" @click="emit('saveNode')">保存草稿</button>
       </div>

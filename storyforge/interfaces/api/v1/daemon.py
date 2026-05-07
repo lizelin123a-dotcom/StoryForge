@@ -196,9 +196,14 @@ def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str)
     resolved["decision"] = decision
     resolved["instructions"] = request.instructions
     manual.setdefault("history", []).append(resolved)
-    manual["pending"] = None
-    manual["decision"] = {"type": decision, "content": request.content, "instructions": request.instructions}
-    manual["instructions"] = request.instructions
+    if decision == "rolled_back":
+        manual["pending"] = pending
+        manual["decision"] = {"type": decision, "content": None, "instructions": request.instructions or "请换一版当前小节，不要推进到下一节。"}
+        manual["instructions"] = request.instructions or "请换一版当前小节，不要推进到下一节。"
+    else:
+        manual["pending"] = None
+        manual["decision"] = {"type": decision, "content": request.content, "instructions": request.instructions}
+        manual["instructions"] = request.instructions
     state["manual_review"] = manual
     novel_id = str(state.get("novel_id") or request.novel_id or "")
     chapter_index = int(resolved.get("chapter_index") or 1)
@@ -223,6 +228,10 @@ def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str)
         card.update({"chapter_index": chapter_index, "node_index": node_index + 1, "completed_nodes": completed, "status": "node_approved", "next_step": f"第 {node_index} 节已写入正文"})
         state["writing_card"] = card
         save_chapter_text(novel_id, chapter_index, chapter_texts[chapter_index - 1])
+    if decision == "rolled_back":
+        card = dict(state.get("writing_card") or {})
+        card.update({"chapter_index": chapter_index, "node_index": node_index, "status": "node_writing", "next_step": f"正在给第 {node_index} 节换一版"})
+        state["writing_card"] = card
     state["status"] = "paused"
     state["current_phase"] = "reviewing"
     save_daemon_state(state)

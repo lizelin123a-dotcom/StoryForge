@@ -311,9 +311,26 @@ class DaemonOrchestrator:
                     "generation_logic": self._build_generation_logic(node, questions, context),
                 },
             )
-            filled = self._wait_for_node_review(chapter_index, filled, len(nodes), chapter_function)
-            if filled is None:
-                continue
+            while True:
+                reviewed = self._wait_for_node_review(chapter_index, filled, len(nodes), chapter_function)
+                if reviewed is not None:
+                    filled = reviewed
+                    break
+                self._update_writing_card(chapter_index, filled.index, len(nodes), self._approved_node_indexes(chapter_index), "node_writing", f"正在给第 {filled.index} 节换一版", chapter_function)
+                retry_context = build_governed_context(
+                    chapter_index=chapter_index,
+                    story_bible={"world_setting": self.world_setting, "characters": self.characters, "genre": self.genre},
+                    chapter_summaries=self.state["chapter_summaries"],
+                    baseline_texts=self.state["baseline_texts"],
+                    foreshadowing_ledger=self.state["foreshadowing_ledger"],
+                    manual_instructions=self.state.get("manual_review", {}).get("instructions", "请换一版当前小节，不要推进到下一节。"),
+                    novel_assets=self.state.get("novel_assets") or get_novel_assets(self.state["novel_id"]),
+                    locked_nodes=self.state.get("locked_nodes") or list_node_drafts(self.state["novel_id"], locked_only=True),
+                )
+                retry_questions = answer_four_questions(node, retry_context, llm=llm)
+                filled = generate_node_content(node, retry_context, retry_questions, llm=llm)
+                save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai_redraw", status="drafted", target_words=int(getattr(node, "expected_word_count", 0) or 0))
+                self._notify("node_draft_generated", {"chapter_index": chapter_index, "node_index": filled.index, "node_type": filled.node_type, "content": filled.content, "generation_logic": self._build_generation_logic(node, retry_questions, retry_context)})
             generated_nodes.append(filled)
             self._notify(
                 "node_generated",
@@ -453,6 +470,7 @@ class DaemonOrchestrator:
         decision = manual.get("decision") or {}
         manual["decision"] = None
         if decision.get("type") == "rolled_back":
+            self._update_writing_card(chapter_index, node.index, planned_nodes, self._approved_node_indexes(chapter_index), "node_writing", f"正在给第 {node.index} 节换一版", chapter_title)
             return None
         if decision.get("content") is not None:
             content = str(decision.get("content") or "")

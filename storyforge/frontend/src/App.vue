@@ -534,7 +534,7 @@ async function submitReviewDecision(action: 'approve' | 'rewrite' | 'rollback') 
     if (action !== 'rollback' && reviewContent.trim()) {
       currentChapterText.value = `${currentChapterText.value}${currentChapterText.value.trim() ? '\n\n' : ''}${reviewContent}`
     }
-    appNotice.value = action === 'approve' ? '审阅已通过，内容已写入正文。' : action === 'rewrite' ? '已按当前编辑内容写入正文。' : '已回滚该节点。'
+    appNotice.value = action === 'approve' ? '审阅已通过，内容已写入正文。' : action === 'rewrite' ? '已按当前编辑内容写入正文。' : '已要求 AI 换一版当前小节。'
     reviewEditContent.value = ''
     reviewInstructions.value = ''
     await refreshStatus()

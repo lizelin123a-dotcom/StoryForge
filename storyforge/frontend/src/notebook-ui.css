@@ -1759,3 +1759,75 @@ body {
   position: static !important;
   right: auto;
 }
+
+/* v3.5 prettier right rail with chapter/book downloads */
+.notebook-workspace > .book-tabs {
+  margin-top: 86px;
+  align-self: start;
+  padding: 8px 4px;
+  border: 1px solid rgba(141,106,63,.12);
+  border-radius: 999px;
+  background: rgba(255,253,248,.34);
+  box-shadow: 0 10px 30px rgba(55,42,28,.06);
+  backdrop-filter: blur(12px);
+}
+
+.book-tabs__group {
+  display: grid;
+  gap: 6px;
+}
+
+.book-tabs__group--chapters {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(141,106,63,.12);
+}
+
+.book-tabs__group--downloads {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(141,106,63,.12);
+}
+
+.notebook-workspace > .book-tabs .book-tab {
+  display: grid;
+  width: 30px;
+  min-width: 30px;
+  max-width: 30px;
+  min-height: 30px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(81,66,53,.62);
+  box-shadow: none;
+  font-size: .76rem;
+  font-weight: 900;
+  writing-mode: horizontal-tb;
+}
+
+.notebook-workspace > .book-tabs .book-tab:hover {
+  border-color: rgba(141,106,63,.22);
+  background: rgba(255,253,248,.78);
+  color: var(--mw-accent);
+}
+
+.notebook-workspace > .book-tabs .book-tab--active {
+  border-color: rgba(141,106,63,.3);
+  background: rgba(141,106,63,.12);
+  color: var(--mw-accent);
+}
+
+.notebook-workspace > .book-tabs .book-tab--download {
+  background: rgba(111,143,104,.10);
+  color: #587451;
+}
+
+.notebook-workspace > .book-tabs .book-tab--log {
+  color: rgba(81,66,53,.48);
+}
+
+.notebook-workspace > .book-tabs .book-tab:disabled {
+  opacity: .28;
+  cursor: not-allowed;
+}

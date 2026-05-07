@@ -586,15 +586,33 @@ async function deleteNovel(id: string) {
   }
 }
 
-function exportText() {
-  const body = chapters.value.length ? chapters.value.map((chapter) => `${chapter.title}\n\n${chapter.content}`).join('\n\n---\n\n') : '尚未开始写作'
+function downloadTextFile(filename: string, body: string) {
   const blob = new Blob([body], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `${selectedNovel.value?.title || 'storyforge-novel'}.txt`
+  link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+function safeFilename(value: string) {
+  return value.replace(/[\\/:*?"<>|]/g, '_').trim() || 'storyforge'
+}
+
+function exportText() {
+  const body = chapters.value.length ? chapters.value.map((chapter) => `${chapter.title}\n\n${chapter.content}`).join('\n\n---\n\n') : '尚未开始写作'
+  downloadTextFile(`${safeFilename(selectedNovel.value?.title || 'storyforge-novel')}.txt`, body)
+}
+
+function exportChapter(index = activeChapter.value) {
+  const chapter = chapters.value[index]
+  if (!chapter) {
+    appNotice.value = '当前没有可下载的章节。'
+    return
+  }
+  const title = chapter.title || `第 ${index + 1} 章`
+  downloadTextFile(`${safeFilename(selectedNovel.value?.title || 'StoryForge')}-${safeFilename(title)}.txt`, `${title}\n\n${chapter.content || ''}`)
 }
 
 function exportAllNovels() {
@@ -703,6 +721,7 @@ onMounted(async () => {
         @pause-writing="pauseWriting"
         @resume-writing="resumeWriting"
         @export-text="exportText"
+        @export-chapter="exportChapter"
         @save-chapter="saveCurrentChapter"
         @save-node="saveCurrentNode"
         @toggle-node-lock="toggleNodeLock"

@@ -75,6 +75,7 @@ const emit = defineEmits<{
   pauseWriting: []
   resumeWriting: []
   exportText: []
+  exportChapter: [index: number]
   saveChapter: []
   saveNode: []
   toggleNodeLock: [node: NodeDraft]
@@ -151,6 +152,8 @@ const assetEntries = computed(() => Object.entries(props.selectedNovel?.assets |
         :chapters="chapters"
         :active-chapter="activeChapter"
         @update:active-chapter="emit('update:activeChapter', $event)"
+        @download-chapter="emit('exportChapter', $event)"
+        @download-book="emit('exportText')"
         @toggle-debug="debugOpen = !debugOpen"
       />
     </template>

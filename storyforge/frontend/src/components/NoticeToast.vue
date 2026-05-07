@@ -1,11 +1,21 @@
 <script setup lang="ts">
-defineProps<{
+import { watch } from 'vue'
+
+const props = defineProps<{
   notice: string
 }>()
 
 const emit = defineEmits<{
   close: []
 }>()
+
+let closeTimer: number | undefined
+
+watch(() => props.notice, (notice) => {
+  if (closeTimer) window.clearTimeout(closeTimer)
+  if (!notice) return
+  closeTimer = window.setTimeout(() => emit('close'), 3200)
+})
 </script>
 
 <template>

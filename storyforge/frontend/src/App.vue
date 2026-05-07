@@ -124,8 +124,9 @@ const currentChapterIndex = computed(() => activeChapter.value + 1)
 const currentChapterNodeDrafts = computed(() => nodeDrafts.value.filter((node) => Number(node.chapter_index) === currentChapterIndex.value))
 const selectedNode = computed(() => nodeDrafts.value.find((node) => node.id === selectedNodeId.value) || null)
 const currentNodeText = computed({
-  get: () => selectedNode.value?.content || '',
+  get: () => reviewEditContent.value || selectedNode.value?.content || '',
   set: (value: string) => {
+    reviewEditContent.value = value
     if (selectedNode.value) selectedNode.value.content = value
   },
 })
@@ -334,7 +335,7 @@ async function saveCurrentChapter() {
 async function saveCurrentNode() {
   if (!selectedNovelId.value || !selectedNode.value) return
   try {
-    const saved = await api.saveNode(selectedNovelId.value, { ...selectedNode.value, content: currentNodeText.value, source: 'manual', sync_chapter: true }) as unknown as NodeDraft
+    const saved = await api.saveNode(selectedNovelId.value, { ...selectedNode.value, content: currentNodeText.value, source: 'manual', sync_chapter: false }) as unknown as NodeDraft
     upsertNodeDraft(saved)
     appNotice.value = '节点已保存。'
   } catch (error) {
@@ -344,7 +345,7 @@ async function saveCurrentNode() {
 
 async function toggleNodeLock(node: NodeDraft) {
   if (!selectedNovelId.value) return
-  const saved = await api.saveNode(selectedNovelId.value, { ...node, locked: !node.locked, source: node.source || 'manual', sync_chapter: true }) as unknown as NodeDraft
+  const saved = await api.saveNode(selectedNovelId.value, { ...node, locked: !node.locked, source: node.source || 'manual', sync_chapter: false }) as unknown as NodeDraft
   upsertNodeDraft(saved)
 }
 
@@ -520,13 +521,16 @@ async function resumeWriting() {
 
 async function submitReviewDecision(action: 'approve' | 'rewrite' | 'rollback') {
   try {
-    const reviewContent = selectedNode.value?.content ?? reviewEditContent.value
+    const reviewContent = reviewEditContent.value || selectedNode.value?.content || ''
     const payload = { content: String(reviewContent || ''), instructions: reviewInstructions.value }
     const payloadWithNovel = { ...payload, novel_id: selectedNovelId.value }
     if (action === 'approve') await api.approveNode(payloadWithNovel)
     if (action === 'rewrite') await api.rewriteNode(payloadWithNovel)
     if (action === 'rollback') await api.rollbackNode({ novel_id: selectedNovelId.value, instructions: reviewInstructions.value })
-    appNotice.value = action === 'approve' ? '审阅已通过，内容已同步。' : action === 'rewrite' ? '已按当前编辑内容提交重写/替换。' : '已回滚该节点。'
+    if (action !== 'rollback' && reviewContent.trim()) {
+      currentChapterText.value = `${currentChapterText.value}${currentChapterText.value.trim() ? '\n\n' : ''}${reviewContent}`
+    }
+    appNotice.value = action === 'approve' ? '审阅已通过，内容已写入正文。' : action === 'rewrite' ? '已按当前编辑内容写入正文。' : '已回滚该节点。'
     reviewEditContent.value = ''
     reviewInstructions.value = ''
     await refreshStatus()

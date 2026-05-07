@@ -344,8 +344,12 @@ class DaemonOrchestrator:
         return None
 
     def _commit_chapter(self, chapter_index: int, chapter_text: str, review_data: dict[str, Any], conflict_data: dict[str, Any]) -> None:
-        self.state["chapter_texts"].append(chapter_text)
-        self.state["baseline_texts"].append(chapter_text)
+        while len(self.state["chapter_texts"]) < chapter_index:
+            self.state["chapter_texts"].append("")
+        existing = str(self.state["chapter_texts"][chapter_index - 1] or "")
+        committed_text = existing or chapter_text
+        self.state["chapter_texts"][chapter_index - 1] = committed_text
+        self.state["baseline_texts"] = list(self.state["chapter_texts"])
         self.state["chapter_summaries"].append(str(review_data.get("chapter_summary", "")))
         self.state["conflicts"] = conflict_data.get("current_conflicts", self.state["conflicts"])
         foreshadowing = review_data.get("foreshadowing", {})
@@ -354,9 +358,9 @@ class DaemonOrchestrator:
             "closed_hooks": foreshadowing.get("closed_hooks", []),
             "still_open": foreshadowing.get("still_open", []),
         }
-        self.state["progress"]["written_chapters"] += 1
-        self.state["progress"]["total_words"] += len(chapter_text)
-        save_chapter_text(self.state["novel_id"], chapter_index, chapter_text)
+        self.state["progress"]["written_chapters"] = max(int(self.state["progress"].get("written_chapters") or 0), chapter_index)
+        self.state["progress"]["total_words"] = sum(len(str(text or "")) for text in self.state["chapter_texts"])
+        save_chapter_text(self.state["novel_id"], chapter_index, committed_text)
 
     def _calculate_quality_score(self, review_data: dict[str, Any]) -> int:
         score = 50
@@ -405,7 +409,15 @@ class DaemonOrchestrator:
             return None
         if decision.get("content") is not None:
             content = str(decision.get("content") or "")
-            save_node_draft(self.state["novel_id"], chapter_index, node.index, node.node_type, content, locked=True, source="manual_review")
+            save_node_draft(self.state["novel_id"], chapter_index, node.index, node.node_type, content, locked=True, source="manual_review", sync_chapter=False)
+            existing_texts = self.state.setdefault("chapter_texts", [])
+            while len(existing_texts) < chapter_index:
+                existing_texts.append("")
+            existing = str(existing_texts[chapter_index - 1] or "")
+            existing_texts[chapter_index - 1] = f"{existing}{chr(10) + chr(10) if existing else ''}{content}"
+            self.state["baseline_texts"] = list(existing_texts)
+            self.state["progress"]["total_words"] = sum(len(str(text or "")) for text in existing_texts)
+            save_chapter_text(self.state["novel_id"], chapter_index, existing_texts[chapter_index - 1])
             return node.model_copy(update={"content": content})
         return node
 

@@ -10,7 +10,7 @@ from .material import CharacterCardModel, MaterialBankModel
 from .node import ChapterNodeModel, WritingFourQuestionsModel
 from .shared import ConflictModel
 from .daemon import DaemonStateModel
-from .novel_writing import ActPlanModel, ChapterOutlineModel, MacroOutlineModel
+from .novel_writing import ActPlanModel, ChapterArchiveModel, ChapterOutlineModel, ChapterSpanModel, CurrentFocusModel, MacroOutlineModel
 
 __all__ = [
     "ChapterModel",
@@ -30,4 +30,7 @@ __all__ = [
     "MacroOutlineModel",
     "ActPlanModel",
     "ChapterOutlineModel",
+    "ChapterArchiveModel",
+    "CurrentFocusModel",
+    "ChapterSpanModel",
 ]

@@ -177,14 +177,21 @@ class DaemonOrchestrator:
         resolved["instructions"] = instructions
         manual.setdefault("history", []).append(resolved)
         manual["pending"] = None
-        manual["decision"] = {"type": decision, "content": content, "instructions": instructions}
-        manual["instructions"] = instructions
+        if decision == "rolled_back":
+            rejected = str(resolved.get("content") or "")
+            rewrite_instruction = instructions.strip() or "上一版不满意。下一版必须换写法，不要沿用上一版的开头、节奏、意象、句式和叙述重心；冲突更直给，动作和对话更具体。"
+            manual["last_rejected"] = {"chapter_index": resolved.get("chapter_index"), "node_index": resolved.get("node_index"), "content": rejected[:1200], "reason": rewrite_instruction}
+            manual["decision"] = {"type": decision, "content": content, "instructions": rewrite_instruction}
+            manual["instructions"] = f"{rewrite_instruction}\n\n上一版已被拒绝，禁止复用其写法和重点。上一版节选：{rejected[:800]}"
+        else:
+            manual["decision"] = {"type": decision, "content": content, "instructions": instructions}
+            manual["instructions"] = instructions
         self._notify("node_review_resolved", {"decision": decision, "node": resolved})
         return resolved
 
     def _run_loop(self) -> None:
         try:
-            llm = self._get_llm()
+            llm = self._get_llm("planning")
             self.state["current_phase"] = "planning"
             macro_outline = generate_macro_outline(
                 title=self.title,
@@ -261,12 +268,20 @@ class DaemonOrchestrator:
         chapter_function = str(chapter.get("core_event", "推进主线"))
         self.state["current_phase"] = "writing"
         self._update_writing_card(chapter_index, 1, 0, [], "chapter_planning", "正在拆分本章小节", chapter_function)
-        llm = self._get_llm()
-        nodes = generate_chapter_outline(act, chapter_index, chapter_function, llm=llm)
+        llm = self._get_llm("writing")
+        outline = generate_chapter_outline(act, chapter_index, chapter_function, llm=self._get_llm("planning"))
+        nodes = self._outline_to_nodes(outline)
+        self.state["current_chapter_outline"] = {
+            "chapter_index": chapter_index,
+            "chapter_function": chapter_function,
+            "outline": outline,
+            "nodes": [node.model_dump() for node in nodes],
+        }
+        self._persist_state()
         existing_completed = self._approved_node_indexes(chapter_index)
         next_node = self._next_node_index(nodes, existing_completed)
         self._update_writing_card(chapter_index, next_node, len(nodes), existing_completed, "writing", f"准备生成第 {next_node} 节", chapter_function)
-        self._notify("outline_ready", {"chapter_index": chapter_index, "nodes": [node.model_dump() for node in nodes]})
+        self._notify("outline_ready", {"chapter_index": chapter_index, "outline": outline, "nodes": [node.model_dump() for node in nodes]})
 
         generated_nodes: list[ChapterNode] = []
         for node in nodes:
@@ -344,20 +359,23 @@ class DaemonOrchestrator:
             )
 
         consistency = check_node_consistency(generated_nodes)
-        outline_check = check_chapter_outline(generated_nodes)
+        checked_outline = dict(outline) if isinstance(outline, dict) else {"nodes": [node.model_dump() for node in nodes]}
+        checked_outline["nodes"] = [node.model_dump() for node in generated_nodes]
+        outline_check = check_chapter_outline(checked_outline)
         chapter_text = "\n\n".join(node.content or "" for node in generated_nodes)
 
         self.state["current_phase"] = "reviewing"
         self._update_writing_card(chapter_index, len(nodes), len(nodes), self._approved_node_indexes(chapter_index), "chapter_review", "正在做章末检查", chapter_function)
+        review_llm = self._get_llm("review")
         review_data = review_chapter(
             novel_id=self.state["novel_id"],
             chapter_index=chapter_index,
             chapter_text=chapter_text,
             previous_summaries=self.state["chapter_summaries"],
             foreshadowing_ledger=self.state["foreshadowing_ledger"],
-            llm=llm,
+            llm=review_llm,
         )
-        conflict_data = track_conflicts(chapter_text, chapter_index, self.state["conflicts"], llm=llm)
+        conflict_data = track_conflicts(chapter_text, chapter_index, self.state["conflicts"], llm=review_llm)
         voice_data = detect_voice_drift(chapter_text, self.state["baseline_texts"][-3:])
         self._notify_fallback_if_needed(review_data)
         review_data["consistency"] = consistency
@@ -374,6 +392,19 @@ class DaemonOrchestrator:
         self._notify("chapter_reviewed", {"chapter_index": chapter_index, "review_data": review_data})
         self._notify("writing_progress", self.get_progress())
         return {"chapter_index": chapter_index, "review_data": review_data, "quality_score": quality_score}
+
+    def _outline_to_nodes(self, outline: Any) -> list[ChapterNode]:
+        if isinstance(outline, dict):
+            raw_nodes = outline.get("nodes") or []
+        else:
+            raw_nodes = outline or []
+        nodes: list[ChapterNode] = []
+        for item in raw_nodes:
+            if isinstance(item, ChapterNode):
+                nodes.append(item)
+            elif isinstance(item, dict):
+                nodes.append(ChapterNode(**item))
+        return nodes
 
     def _approved_node_indexes(self, chapter_index: int) -> list[int]:
         locked_nodes = self.state.get("locked_nodes") or list_node_drafts(self.state["novel_id"], locked_only=True)
@@ -515,17 +546,21 @@ class DaemonOrchestrator:
         warnings.extend(review_data.get("outline_check", {}).get("issues", []))
         self._notify("error", {"message": f"chapter {chapter_index} quality below threshold, rewriting with feedback: {warnings}", "fatal": False})
 
-    def _get_llm(self) -> Callable[[str, str, bool], str]:
+    def _get_llm(self, role: str = "default") -> Callable[[str, str, bool], str]:
         config = self.state.get("llm_config", {})
+        role_key = f"{role}_model"
+        model_name = config.get(role_key) or config.get("model")
+        api_key = config.get(f"{role}_api_key") or config.get("api_key")
+        base_url = config.get(f"{role}_api_base_url") or config.get("api_base_url")
 
         def llm_call(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:
             return call_llm(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 json_mode=json_mode,
-                api_key=config.get("api_key") or None,
-                base_url=config.get("api_base_url") or None,
-                model=config.get("model") or None,
+                api_key=api_key or None,
+                base_url=base_url or None,
+                model=model_name or None,
             )
 
         return llm_call

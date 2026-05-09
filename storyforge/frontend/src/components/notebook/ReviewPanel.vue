@@ -14,6 +14,7 @@ const emit = defineEmits<{
   saveNode: []
   toggleNodeLock: [node: NodeDraft]
   reviewDecision: [action: 'approve' | 'rewrite' | 'rollback']
+  rewriteChapter: []
 }>()
 </script>
 
@@ -26,20 +27,21 @@ const emit = defineEmits<{
         <span>先改，再写入正文。</span>
       </div>
 
-      <textarea
-        :value="currentNodeText"
-        class="paper-textarea paper-textarea--node"
-        placeholder="当前节点草稿会显示在这里。"
-        @input="emit('update:currentNodeText', ($event.target as HTMLTextAreaElement).value)"
-      />
-
-      <div class="review-actions">
+      <div class="review-actions review-actions--top">
+        <button class="sf-btn sf-btn--danger" title="清空本章正文和已通过小节，从第 1 节重来" @click="emit('rewriteChapter')">重写本章</button>
         <button class="sf-btn sf-btn--success review-actions__primary" @click="emit('reviewDecision', 'approve')">写入</button>
         <button class="sf-btn sf-btn--warning" @click="emit('reviewDecision', 'rewrite')">改后写入</button>
         <button class="sf-btn sf-btn--danger" @click="emit('reviewDecision', 'rollback')">换一版</button>
         <button v-if="selectedNode" class="sf-btn sf-btn--ghost" @click="emit('toggleNodeLock', selectedNode)">{{ selectedNode.locked ? '解锁' : '锁定' }}</button>
         <button class="sf-btn sf-btn--ghost" :disabled="!selectedNodeId" @click="emit('saveNode')">保存草稿</button>
       </div>
+
+      <textarea
+        :value="currentNodeText"
+        class="paper-textarea paper-textarea--node"
+        placeholder="当前节点草稿会显示在这里。"
+        @input="emit('update:currentNodeText', ($event.target as HTMLTextAreaElement).value)"
+      />
     </template>
 
     <template v-else-if="selectedNode">
@@ -49,19 +51,23 @@ const emit = defineEmits<{
         <span>可编辑保存，不会直接写入正文。</span>
       </div>
 
+      <div class="review-actions review-actions--top">
+        <button class="sf-btn sf-btn--danger" title="清空本章正文和已通过小节，从第 1 节重来" @click="emit('rewriteChapter')">重写本章</button>
+        <button class="sf-btn sf-btn--ghost" @click="emit('toggleNodeLock', selectedNode)">{{ selectedNode.locked ? '解锁' : '锁定' }}</button>
+        <button class="sf-btn sf-btn--ghost" @click="emit('saveNode')">保存草稿</button>
+      </div>
+
       <textarea
         :value="currentNodeText"
         class="paper-textarea paper-textarea--node"
         placeholder="当前节点草稿会显示在这里。"
         @input="emit('update:currentNodeText', ($event.target as HTMLTextAreaElement).value)"
       />
-
-      <div class="review-actions">
-        <button class="sf-btn sf-btn--ghost" @click="emit('toggleNodeLock', selectedNode)">{{ selectedNode.locked ? '解锁' : '锁定' }}</button>
-        <button class="sf-btn sf-btn--ghost" @click="emit('saveNode')">保存草稿</button>
-      </div>
     </template>
 
-    <div v-else class="paper-empty review-empty">暂无待审节点。AI 生成后会贴在正文上方。</div>
+    <div v-else class="paper-empty review-empty">
+      <span>暂无待审节点。AI 生成后会贴在正文上方。</span>
+      <button class="sf-btn sf-btn--danger" title="清空本章正文和已通过小节，从第 1 节重来" @click="emit('rewriteChapter')">重写本章</button>
+    </div>
   </section>
 </template>

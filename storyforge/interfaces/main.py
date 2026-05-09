@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from storyforge.infrastructure.persistence import init_db
-from storyforge.interfaces.api.v1 import analyst_router, cocreation_router, daemon_router, dissect_router, novel_router, planner_router
+from storyforge.interfaces.api.v1 import analyst_router, cocreation_router, daemon_router, dissect_router, novel_router, planner_router, workflow_router
 
 
 @asynccontextmanager
@@ -33,6 +33,7 @@ app.include_router(planner_router)
 app.include_router(analyst_router)
 app.include_router(daemon_router)
 app.include_router(novel_router)
+app.include_router(workflow_router)
 
 
 @app.get("/health")

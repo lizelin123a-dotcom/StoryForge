@@ -16,11 +16,13 @@ export type WritingAnalysis = {
 
 export type CocreationMessage = { role: 'user' | 'assistant'; content: string }
 export type EditorSkill = { id: string; title: string; description: string }
-export type EditPatch = { target: 'node' | 'chapter' | 'none'; mode: 'replace' | 'append' | 'none'; content: string; reason?: string; lock_node?: boolean }
+export type EditPatch = { target: 'node' | 'chapter' | 'span' | 'none'; mode: 'replace' | 'append' | 'insert' | 'none'; content: string; reason?: string; lock_node?: boolean; span?: { start: number; end: number } }
+export type UIAction = { type: 'rewrite_node' | 'apply_edit_patch' | 'rewrite_chapter' | 'update_chapter_outline' | 'update_book_outline' | 'update_asset' | 'delete_asset' | 'clear_assets'; label: string; target?: Record<string, unknown>; payload?: Record<string, unknown>; risk: 'low' | 'medium' | 'high'; preview?: string }
 export type CocreationTurn = {
   reply: string
   asset_patch: Record<string, string>
   edit_patch?: EditPatch
+  ui_actions?: UIAction[]
   next_focus: string
   ready_for_writing: boolean
   fields: { name: string; description: string }[]

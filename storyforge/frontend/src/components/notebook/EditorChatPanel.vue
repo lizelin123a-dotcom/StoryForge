@@ -9,6 +9,15 @@ const props = defineProps<{
   editorChatLastTurn: CocreationTurn | null
   editorSkills: EditorSkill[]
   selectedSkillIds: string[]
+  writingForm: {
+    apiKey: string
+    apiBaseUrl: string
+    model: string
+    writingModel: string
+    writingApiKey: string
+    writingApiBaseUrl: string
+  }
+  fullAutoMode: boolean
 }>()
 
 const emit = defineEmits<{
@@ -16,6 +25,7 @@ const emit = defineEmits<{
   sendEditorChat: []
   applyEditorPatch: []
   toggleEditorSkill: [skillId: string]
+  'update:fullAutoMode': [value: boolean]
 }>()
 
 const toolsOpen = ref(false)
@@ -57,10 +67,30 @@ watch(() => props.editorChatLoading, scrollToBottom)
 
     <div v-if="editorChatLastTurn?.edit_patch?.target && editorChatLastTurn.edit_patch.target !== 'none'" class="chat-patch-card">
       <div><strong>可应用修改</strong><span>{{ editorChatLastTurn.edit_patch.reason || 'AI 给出了一段可写入内容。' }}</span></div>
-      <button class="sf-btn sf-btn--success" @click="emit('applyEditorPatch')">应用到{{ editorChatLastTurn.edit_patch.target === 'node' ? '节点' : '章节' }}</button>
+      <button class="sf-btn sf-btn--success" @click="emit('applyEditorPatch')">应用到{{ editorChatLastTurn.edit_patch.target === 'node' ? '节点' : editorChatLastTurn.edit_patch.target === 'span' ? '段落' : '章节' }}</button>
+    </div>
+
+    <div v-if="editorChatLastTurn?.ui_actions?.length" class="chat-patch-card chat-action-card">
+      <div>
+        <strong>AI 可执行操作</strong>
+        <span v-for="action in editorChatLastTurn.ui_actions" :key="action.label">{{ action.label }}：{{ action.preview || '等待确认' }}</span>
+      </div>
+      <button class="sf-btn sf-btn--warning" @click="emit('applyEditorPatch')">查看并执行</button>
     </div>
 
     <div class="chat-tools-panel" :class="toolsOpen ? 'chat-tools-panel--open' : ''">
+      <section class="chat-model-panel">
+        <strong>模型接入</strong>
+        <label>DeepSeek Key<input v-model="writingForm.apiKey" type="password" placeholder="sk-..." /></label>
+        <label>Base URL<input v-model="writingForm.apiBaseUrl" placeholder="https://api.deepseek.com/v1" /></label>
+        <div class="chat-model-grid">
+          <label>默认<input v-model="writingForm.model" placeholder="gpt-5.5 / deepseek-chat" /></label>
+          <label>正文模型<input v-model="writingForm.writingModel" placeholder="deepseek-chat" /></label>
+        </div>
+        <label>正文 DeepSeek Key<input v-model="writingForm.writingApiKey" type="password" placeholder="留空则用上面的 Key" /></label>
+        <label>正文 Base URL<input v-model="writingForm.writingApiBaseUrl" placeholder="https://api.deepseek.com/v1" /></label>
+        <label class="chat-model-check"><input :checked="fullAutoMode" type="checkbox" @change="emit('update:fullAutoMode', ($event.target as HTMLInputElement).checked)" /> 全自动写入</label>
+      </section>
       <button
         v-for="skill in editorSkills"
         :key="skill.id"

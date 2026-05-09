@@ -13,6 +13,10 @@ SIGNAL_KEYWORDS: dict[str, tuple[str, ...]] = {
     "信息差": ("以为", "其实", "不知道", "隐瞒", "误会", "身份", "底牌", "真相", "秘密", "暴露"),
     "代入感": ("看见", "听见", "闻到", "触到", "疼", "汗", "光", "风", "雨", "血", "手", "眼"),
     "角色行动": ("走", "冲", "抓", "推", "砸", "拔", "写", "说", "盯", "按", "挡", "逃", "追"),
+    "章纲执行": ("任务", "目标", "线索", "兑现", "选择", "变化", "回收", "推进"),
+    "角色一致": ("习惯", "能力", "关系", "位置", "身份", "承诺", "代价", "反应"),
+    "世界规则": ("规则", "制度", "等级", "禁令", "代价", "资源", "权限", "边界"),
+    "AI味风险": ("意识到", "这意味着", "不由得", "不禁", "内心", "复杂", "情感", "升华"),
 }
 
 
@@ -49,6 +53,15 @@ def _pattern_bonus(name: str, text: str) -> int:
         return 18
     if name == "代入感" and len(re.findall(r"[，。；、]", text)) >= 4:
         return 8
+    if name == "章纲执行" and re.search(r"(任务|目标).{0,30}(完成|失败|改变|推进)", text):
+        return 22
+    if name == "角色一致" and re.search(r"(他|她).{0,20}(习惯|仍然|没有|握|停|看)", text):
+        return 12
+    if name == "世界规则" and re.search(r"(规则|禁令|制度|等级).{0,30}(限制|允许|代价|后果)", text):
+        return 22
+    if name == "AI味风险":
+        penalty_hits = len(re.findall(r"意识到|这意味着|不由得|不禁|内心|情感升华|不是.{1,20}(而是|，是|,是)", text))
+        return min(60, penalty_hits * 16)
     return 0
 
 
@@ -80,6 +93,14 @@ def _build_suggestions(weak: list[str], strong: list[str], text: str) -> list[st
         suggestions.append("如果本段承担爆发功能，可以加入反击、揭示底牌或局势反转。")
     if "代入感" in weak:
         suggestions.append("增加一个感官细节，例如光线、声音、触感、疼痛或空间压迫。")
+    if "章纲执行" in weak:
+        suggestions.append("补清本段承担的章节任务：它推进了哪个目标、兑现了哪个期待，或改变了什么状态。")
+    if "角色一致" in weak:
+        suggestions.append("给角色一个符合其身份、关系或旧经历的反应，避免所有人用同一种说话和身体模板。")
+    if "世界规则" in weak:
+        suggestions.append("如果本段涉及设定，补出规则的限制、代价或后果，让世界观参与剧情而不是做背景。")
+    if "AI味风险" in strong:
+        suggestions.append("检测到 AI 腔风险，删掉“意识到/这意味着/不是而是/情感升华”等分析句，改成动作和场景。")
     if not suggestions:
         suggestions.append("信号较完整，下一步可检查节奏：铺垫是否过长，爆发是否足够具体。")
-    return suggestions[:4]
+    return suggestions[:5]

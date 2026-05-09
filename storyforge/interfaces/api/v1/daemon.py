@@ -11,6 +11,8 @@ from storyforge.application.daemon.services.daemon_orchestrator import DaemonOrc
 from storyforge.application.daemon.services.sse_event_service import SSEEventManager
 from storyforge.infrastructure.ai.openai_adapter import call_llm
 from storyforge.infrastructure.persistence.daemon_state_repository import load_daemon_state, load_latest_daemon_state, save_daemon_state
+from storyforge.infrastructure.persistence.database import SessionLocal, init_db
+from storyforge.infrastructure.persistence.models.novel import ChapterModel, NodeDraftModel
 from storyforge.infrastructure.persistence.novel_repository import save_chapter_text, save_node_draft
 
 router = APIRouter(tags=["daemon"])
@@ -31,6 +33,12 @@ class DaemonStartRequest(BaseModel):
     api_key: str = ""
     api_base_url: str = "https://api.deepseek.com/v1"
     model: str = "deepseek-chat"
+    planning_model: str = ""
+    writing_model: str = ""
+    writing_api_key: str = ""
+    writing_api_base_url: str = ""
+    review_model: str = ""
+    fast_model: str = ""
     semi_auto: bool = False
 
 
@@ -44,6 +52,12 @@ class ReviewDecisionRequest(BaseModel):
     novel_id: str | None = None
     content: str | None = None
     instructions: str = ""
+
+
+class RewriteChapterRequest(BaseModel):
+    novel_id: str
+    chapter_index: int = Field(ge=1)
+    reset_outline: bool = False
 
 
 @router.get("/api/v1/daemon/events")
@@ -78,7 +92,7 @@ def start_daemon(request: DaemonStartRequest) -> dict[str, str]:
         quality_threshold=request.quality_threshold,
         api_key=request.api_key,
         api_base_url=request.api_base_url,
-        model=request.model,
+        model=request.writing_model or request.model,
         novel_id=request.novel_id,
         semi_auto=request.semi_auto,
         initial_state=saved_state,
@@ -89,6 +103,7 @@ def start_daemon(request: DaemonStartRequest) -> dict[str, str]:
         if existing is not None and existing.get_state().get("status") == "running":
             raise HTTPException(status_code=409, detail="daemon is already running for this novel")
         orchestrators[novel_id] = candidate
+    _apply_model_roles(candidate, request)
     candidate.add_listener(sse_manager.broadcast)
     candidate.start()
     return {"status": "started", "novel_id": novel_id}
@@ -148,6 +163,13 @@ def rollback_review(request: ReviewDecisionRequest) -> dict[str, Any]:
     return {"status": "rolled_back", "node": node}
 
 
+@router.post("/api/v1/daemon/rewrite-chapter")
+def rewrite_chapter(request: RewriteChapterRequest) -> dict[str, Any]:
+    state = _reset_chapter_for_rewrite(request.novel_id, request.chapter_index, request.reset_outline)
+    sse_manager.broadcast({"type": "chapter_rewrite_reset", "data": {"chapter_index": request.chapter_index, "reset_outline": request.reset_outline}, "state": state})
+    return {"status": "ready_to_rewrite", "chapter_index": request.chapter_index, "reset_outline": request.reset_outline, "state": state, "writer_note": "本章正文和已通过小节已清空，可以从第 1 节重新写。"}
+
+
 @router.post("/api/v1/daemon/test-llm")
 def test_llm(request: TestLLMRequest) -> dict[str, str]:
     try:
@@ -171,6 +193,8 @@ def daemon_status(novel_id: str | None = None) -> dict[str, Any]:
             return current.get_state()
         saved_state = load_daemon_state(novel_id)
         if saved_state is not None:
+            saved_state = _normalize_stale_state(saved_state)
+            save_daemon_state(saved_state)
             return saved_state
         return _idle_state(novel_id)
     latest = _latest_running_orchestrator()
@@ -178,8 +202,76 @@ def daemon_status(novel_id: str | None = None) -> dict[str, Any]:
         return latest.get_state()
     latest_state = load_latest_daemon_state()
     if latest_state is not None:
+        latest_state = _normalize_stale_state(latest_state)
+        save_daemon_state(latest_state)
         return latest_state
     return _idle_state()
+
+
+def _reset_chapter_for_rewrite(novel_id: str, chapter_index: int, reset_outline: bool = False) -> dict[str, Any]:
+    init_db()
+    current = _get_running_orchestrator(novel_id)
+    state = current.state if current is not None else (load_daemon_state(novel_id) or _idle_state(novel_id))
+    chapter_texts = list(state.get("chapter_texts") or [])
+    while len(chapter_texts) < chapter_index:
+        chapter_texts.append("")
+    chapter_texts[chapter_index - 1] = ""
+    state["chapter_texts"] = chapter_texts
+    state["baseline_texts"] = list(chapter_texts)
+    state["current_phase"] = "rewrite_ready"
+    state["status"] = "idle"
+    progress = dict(state.get("progress") or {})
+    progress["written_chapters"] = min(int(progress.get("written_chapters") or 0), max(0, chapter_index - 1))
+    progress["total_words"] = sum(len(str(text or "")) for text in chapter_texts)
+    state["progress"] = progress
+    manual = dict(state.get("manual_review") or {})
+    manual["pending"] = None
+    manual["decision"] = None
+    manual["instructions"] = ""
+    state["manual_review"] = manual
+    state["locked_nodes"] = [node for node in (state.get("locked_nodes") or []) if int(node.get("chapter_index") or 0) != chapter_index]
+    card = dict(state.get("writing_card") or {})
+    card.update({"chapter_index": chapter_index, "node_index": 1, "completed_nodes": [], "status": "chapter_rewrite_ready", "next_step": "本章已清空，正在准备重新写第 1 节", "chapter_title": f"第 {chapter_index} 章"})
+    state["writing_card"] = card
+
+    with SessionLocal() as session:
+        session.query(NodeDraftModel).filter(NodeDraftModel.novel_id == novel_id, NodeDraftModel.chapter_index == chapter_index).delete()
+        chapter_id = f"{novel_id}:chapter:{chapter_index}"
+        chapter = session.get(ChapterModel, chapter_id)
+        if chapter is not None:
+            chapter.content = ""
+            chapter.word_count = 0
+        session.commit()
+    save_chapter_text(novel_id, chapter_index, "")
+    save_daemon_state(state)
+    with orchestrators_lock:
+        existing = orchestrators.get(novel_id)
+        if existing is not None:
+            existing.state["status"] = "completed"
+            existing.state["current_phase"] = "rewrite_reset"
+            orchestrators.pop(novel_id, None)
+    return state
+
+
+def _apply_model_roles(candidate: DaemonOrchestrator, request: DaemonStartRequest) -> None:
+    state = candidate.state
+    config = dict(state.get("llm_config") or {})
+    config.update({
+        "model": request.model,
+        "planning_model": request.planning_model or request.model,
+        "writing_model": request.writing_model or request.model,
+        "writing_api_key": request.writing_api_key or request.api_key,
+        "writing_api_base_url": request.writing_api_base_url or request.api_base_url,
+        "review_model": request.review_model or request.model,
+        "fast_model": request.fast_model or request.writing_model or request.model,
+    })
+    state["llm_config"] = config
+    state.setdefault("writing_card", {})["model_roles"] = {
+        "planning": config["planning_model"],
+        "writing": config["writing_model"],
+        "review": config["review_model"],
+        "fast": config["fast_model"],
+    }
 
 
 def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str) -> dict[str, Any]:
@@ -197,9 +289,12 @@ def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str)
     resolved["instructions"] = request.instructions
     manual.setdefault("history", []).append(resolved)
     if decision == "rolled_back":
+        rewrite_instruction = request.instructions or "上一版不满意。下一版必须换写法，不要沿用上一版的开头、节奏、意象、句式和叙述重心；冲突更直给，动作和对话更具体。"
+        rejected = str(pending.get("content") or "")
         manual["pending"] = pending
-        manual["decision"] = {"type": decision, "content": None, "instructions": request.instructions or "请换一版当前小节，不要推进到下一节。"}
-        manual["instructions"] = request.instructions or "请换一版当前小节，不要推进到下一节。"
+        manual["last_rejected"] = {"chapter_index": chapter_index, "node_index": node_index, "content": rejected[:1200], "reason": rewrite_instruction}
+        manual["decision"] = {"type": decision, "content": None, "instructions": rewrite_instruction}
+        manual["instructions"] = f"{rewrite_instruction}\n\n上一版已被拒绝，禁止复用其写法和重点。上一版节选：{rejected[:800]}"
     else:
         manual["pending"] = None
         manual["decision"] = {"type": decision, "content": request.content, "instructions": request.instructions}
@@ -237,6 +332,23 @@ def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str)
     save_daemon_state(state)
     sse_manager.broadcast({"type": "node_review_resolved", "data": {"decision": decision, "node": resolved, "source": "saved_state"}, "state": state})
     return resolved
+
+
+def _normalize_stale_state(state: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(state)
+    if normalized.get("status") == "running":
+        normalized["status"] = "idle"
+        normalized["current_phase"] = "stopped"
+        card = dict(normalized.get("writing_card") or {})
+        if card.get("status") not in {"node_review", "chapter_rewrite_ready"}:
+            card["status"] = "stopped"
+        card["next_step"] = "上次写作进程已随终端关闭而终止，需手动重新启动。"
+        normalized["writing_card"] = card
+    manual = dict(normalized.get("manual_review") or {})
+    if normalized.get("status") != "running":
+        manual["decision"] = None
+    normalized["manual_review"] = manual
+    return normalized
 
 
 def _normalize_resume_state(state: dict[str, Any]) -> dict[str, Any]:
@@ -279,7 +391,7 @@ def _idle_state(novel_id: str = "") -> dict[str, Any]:
         "retry_count": 0,
         "max_retries": 3,
         "quality_threshold": 50,
-        "llm_config": {"api_key": "", "api_base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat"},
+        "llm_config": {"api_key": "", "api_base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat", "planning_model": "", "writing_model": "deepseek-chat", "review_model": "", "fast_model": ""},
         "manual_review": {"enabled": False, "pending": None, "history": [], "instructions": "", "decision": None},
         "writing_card": {"chapter_index": 1, "node_index": 1, "planned_nodes": 0, "completed_nodes": [], "status": "idle", "chapter_title": "第 1 章", "next_step": "等待开始写作"},
         "runtime_memory": {"chapter_summaries": [], "hooks": [], "facts": []},

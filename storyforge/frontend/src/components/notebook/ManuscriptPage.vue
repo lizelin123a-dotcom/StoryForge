@@ -19,6 +19,9 @@ const props = defineProps<{
   hasPendingReview: boolean
   pendingNodeTitle: string
   currentNodeText: string
+  novelAssets?: Record<string, string>
+  daemonState?: DaemonState
+  pendingNode?: Record<string, unknown> | null
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +31,7 @@ const emit = defineEmits<{
   saveNode: []
   toggleNodeLock: [node: NodeDraft]
   reviewDecision: [action: 'approve' | 'rewrite' | 'rollback']
+  rewriteChapter: []
 }>()
 
 const currentChapterWords = computed(() => props.currentChapterText.length)
@@ -47,6 +51,7 @@ const currentChapterWords = computed(() => props.currentChapterText.length)
         @save-node="emit('saveNode')"
         @toggle-node-lock="emit('toggleNodeLock', $event)"
         @review-decision="emit('reviewDecision', $event)"
+        @rewrite-chapter="emit('rewriteChapter')"
       />
 
       <div class="chapter-editor-fill">
@@ -68,6 +73,11 @@ const currentChapterWords = computed(() => props.currentChapterText.length)
     <MarginDiagnosisStack
       :writing-analysis="writingAnalysis"
       :analysis-loading="analysisLoading"
+      :novel-assets="novelAssets"
+      :daemon-state="daemonState"
+      :active-chapter="activeChapter"
+      :selected-node="selectedNode"
+      :pending-node="pendingNode"
       @analyze-current-text="emit('analyzeCurrentText')"
     />
   </div>

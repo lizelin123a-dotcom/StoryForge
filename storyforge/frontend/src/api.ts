@@ -12,6 +12,12 @@ export type DaemonStartPayload = {
   api_key?: string
   api_base_url?: string
   model?: string
+  planning_model?: string
+  writing_model?: string
+  writing_api_key?: string
+  writing_api_base_url?: string
+  review_model?: string
+  fast_model?: string
   semi_auto?: boolean
 }
 
@@ -186,6 +192,10 @@ export const api = {
     request<JsonRecord>(`/api/v1/planner/act/${actIndex}/chapter-outline`, { method: 'POST', body: JSON.stringify(data) }),
   generateNode: (data: JsonRecord) => request<JsonRecord>('/api/v1/writer/generate-node', { method: 'POST', body: JSON.stringify(data) }),
   writingSignals: (data: { text: string }) => request<JsonRecord>('/api/v1/analyst/writing-signals', { method: 'POST', body: JSON.stringify(data) }),
+  archiveChapter: (data: JsonRecord) => request<JsonRecord>('/api/v1/workflow/archive-chapter', { method: 'POST', body: JSON.stringify(data) }),
+  currentFocus: (novelId: string) => request<JsonRecord>(`/api/v1/workflow/${encodeURIComponent(novelId)}/current-focus`),
+  buildChapterSpans: (data: JsonRecord) => request<JsonRecord>('/api/v1/workflow/chapter-spans', { method: 'POST', body: JSON.stringify(data) }),
+  spanPatch: (data: JsonRecord) => request<JsonRecord>('/api/v1/workflow/span-patch', { method: 'POST', body: JSON.stringify(data) }),
 
   startDaemon: (data: DaemonStartPayload) =>
     request<{ status: string; novel_id: string }>('/api/v1/daemon/start', { method: 'POST', body: JSON.stringify(data) }),
@@ -197,6 +207,8 @@ export const api = {
   approveNode: (data: JsonRecord) => request<JsonRecord>('/api/v1/daemon/review/approve', { method: 'POST', body: JSON.stringify(data) }),
   rewriteNode: (data: JsonRecord) => request<JsonRecord>('/api/v1/daemon/review/rewrite', { method: 'POST', body: JSON.stringify(data) }),
   rollbackNode: (data: JsonRecord) => request<JsonRecord>('/api/v1/daemon/review/rollback', { method: 'POST', body: JSON.stringify(data) }),
+  rewriteChapter: (data: { novel_id: string; chapter_index: number; reset_outline?: boolean }) =>
+    request<JsonRecord>('/api/v1/daemon/rewrite-chapter', { method: 'POST', body: JSON.stringify(data) }),
 
   events: () => `${getApiBase().replace(/\/$/, '')}/api/v1/daemon/events`,
 }

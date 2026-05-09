@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 from typing import Any
 
 from storyforge.infrastructure.knowledge import select_writing_guidance
@@ -51,9 +52,11 @@ def build_governed_context(
     active_hooks = _select_active_hooks(foreshadowing_ledger, chapter_index)
     writing_guidance = select_writing_guidance("结构", "期待感", "爽点", "角色", "冲突", limit=4)
     assets = novel_assets or {}
+    current_focus = _maybe_json(assets.get("current_focus")) if isinstance(assets, dict) else None
     locked = _select_locked_nodes(locked_nodes or [], chapter_index)
     entries = [
         ContextEntry("story_bible", "故事圣经", story_bible, 100),
+        ContextEntry("current_focus", "当前三章焦点", current_focus or {}, 99),
         ContextEntry("novel_assets", "共创资产", assets, 98),
         ContextEntry("locked_nodes", "已锁定节点", locked, 97),
         ContextEntry("writing_guidance", "写作教学规则", writing_guidance, 95),
@@ -66,6 +69,7 @@ def build_governed_context(
         "优先延续近三章的叙事视角、节奏和角色状态。",
         "伏笔只推进或回收 hook_agenda 中的条目，不随意新增无关大坑。",
         "优先遵循 writing_guidance 中的写作教学规则：期待感、爽点、结构、冲突和角色行动必须落到具体剧情。",
+        "current_focus 是最近 1-3 章必须盯住的写作重点，优先级高于普通背景设定。",
         "novel_assets 是作者在共创阶段确认的作品骨架，优先级高于临时生成想法。",
         "locked_nodes 是作者人工确认或锁定的节点，后续生成必须承接，不得覆盖、否定或重写。"
     ]
@@ -89,6 +93,7 @@ def build_governed_context(
         "constraints": constraints,
         "writing_guidance": writing_guidance,
         "novel_assets": assets,
+        "current_focus": current_focus or {},
         "locked_nodes": locked,
     }
 
@@ -140,6 +145,15 @@ def evaluate_hook_health(foreshadowing_ledger: dict[str, Any], chapter_index: in
         if age >= 8:
             issues.append({"severity": "warning", "description": str(hook.get("description", "未命名伏笔")), "suggestion": "该伏笔悬挂过久，建议在后续 1-3 章推进或回收。"})
     return issues
+
+
+def _maybe_json(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except Exception:
+        return value
 
 
 def _select_locked_nodes(nodes: list[dict[str, Any]], chapter_index: int, limit: int = 8) -> list[dict[str, Any]]:

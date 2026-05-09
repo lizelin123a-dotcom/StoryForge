@@ -9,7 +9,7 @@ import DissectPage from './components/DissectPage.vue'
 import NewBookPage from './components/NewBookPage.vue'
 import NoticeToast from './components/NoticeToast.vue'
 import WriterStudio from './components/WriterStudio.vue'
-import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, EditorSkill, NodeDraft, RightTab, RouteName, StepState, WritingAnalysis } from './types'
+import type { Chapter, CocreationMessage, CocreationTurn, EditPatch, EditorSkill, NodeDraft, RightTab, RouteName, StepState, UIAction, WritingAnalysis } from './types'
 import { useSSE } from './useSSE'
 
 const APP_VERSION = '2.0.9'
@@ -79,6 +79,11 @@ const writingForm = reactive({
   backendApiBaseUrl: getApiBase(),
   apiBaseUrl: localStorage.getItem('storyforge.llmApiBaseUrl') || localStorage.getItem('plotsys.llmApiBaseUrl') || 'https://api.deepseek.com/v1',
   model: localStorage.getItem('storyforge.model') || localStorage.getItem('plotsys.model') || 'deepseek-chat',
+  planningModel: localStorage.getItem('storyforge.planningModel') || localStorage.getItem('storyforge.model') || 'deepseek-chat',
+  writingModel: localStorage.getItem('storyforge.writingModel') || 'deepseek-chat',
+  writingApiKey: localStorage.getItem('storyforge.writingApiKey') || '',
+  writingApiBaseUrl: localStorage.getItem('storyforge.writingApiBaseUrl') || 'https://api.deepseek.com/v1',
+  reviewModel: localStorage.getItem('storyforge.reviewModel') || localStorage.getItem('storyforge.model') || 'deepseek-chat',
   quality_threshold: 50,
 })
 
@@ -277,6 +282,17 @@ function applyEvent(event: SseEvent) {
       syncChaptersFromState(event.state)
     }
   }
+  if (event.type === 'outline_ready' && event.data && (!selectedNovelId.value || event.state?.novel_id === selectedNovelId.value)) {
+    daemonState.value = {
+      ...daemonState.value,
+      current_chapter_outline: {
+        chapter_index: Number(event.data.chapter_index) || Number((event.state?.writing_card as Record<string, unknown> | undefined)?.chapter_index) || currentChapterIndex.value,
+        chapter_function: String((event.state?.writing_card as Record<string, unknown> | undefined)?.chapter_title || ''),
+        outline: event.data.outline,
+        nodes: event.data.nodes,
+      },
+    }
+  }
   if ((event.type === 'node_draft_generated' || event.type === 'node_generated') && event.data?.content && (!selectedNovelId.value || event.state?.novel_id === selectedNovelId.value)) {
     const index = Math.max(0, (Number(event.data.chapter_index) || 1) - 1)
     while (chapters.value.length <= index) chapters.value.push({ title: `第 ${chapters.value.length + 1} 章`, content: '', nodeLabel: '写作中', nodesDone: 0, nodesTotal: 7 })
@@ -379,6 +395,11 @@ function persistConfig() {
   localStorage.setItem('storyforge.apiKey', writingForm.apiKey)
   localStorage.setItem('storyforge.llmApiBaseUrl', writingForm.apiBaseUrl)
   localStorage.setItem('storyforge.model', writingForm.model)
+  localStorage.setItem('storyforge.planningModel', writingForm.planningModel)
+  localStorage.setItem('storyforge.writingModel', writingForm.writingModel)
+  localStorage.setItem('storyforge.writingApiKey', writingForm.writingApiKey)
+  localStorage.setItem('storyforge.writingApiBaseUrl', writingForm.writingApiBaseUrl)
+  localStorage.setItem('storyforge.reviewModel', writingForm.reviewModel)
   setApiBase(writingForm.backendApiBaseUrl)
 }
 
@@ -438,7 +459,93 @@ async function sendEditorChat() {
   }
 }
 
+async function saveDeskAsset(key: string, value: string) {
+  if (!selectedNovel.value) {
+    appNotice.value = '请先选择作品。'
+    return
+  }
+  const cleanKey = key.trim()
+  const cleanValue = value.trim()
+  if (!cleanKey) {
+    appNotice.value = '设定名不能为空。'
+    return
+  }
+  try {
+    const result = await api.saveAssets(selectedNovel.value.id, { assets: { [cleanKey]: cleanValue } })
+    selectedNovel.value = { ...selectedNovel.value, assets: result.assets }
+    appNotice.value = cleanValue ? `案头设定“${cleanKey}”已按你的版本保存。AI 后续会以这里为准。` : `案头设定“${cleanKey}”已删除。`
+  } catch (error) {
+    appNotice.value = `保存案头设定失败：${String(error)}`
+  }
+}
+
+async function applyOutlineAction(action: UIAction, scope: 'chapter' | 'book') {
+  if (!selectedNovel.value) return
+  const content = String(action.payload?.content || action.payload?.outline || action.preview || '').trim()
+  if (!content) {
+    appNotice.value = scope === 'chapter' ? 'AI 没有给出可写入的章纲内容。' : 'AI 没有给出可写入的大纲内容。'
+    return
+  }
+  const key = scope === 'chapter' ? `chapter_outline:${currentChapterIndex.value}` : 'book_outline_override'
+  const result = await api.saveAssets(selectedNovel.value.id, { assets: { [key]: content } })
+  selectedNovel.value = { ...selectedNovel.value, assets: result.assets }
+  if (scope === 'chapter') {
+    daemonState.value = {
+      ...daemonState.value,
+      current_chapter_outline: {
+        ...((daemonState.value.current_chapter_outline as Record<string, unknown>) || {}),
+        chapter_index: currentChapterIndex.value,
+        override_text: content,
+      },
+    }
+  } else {
+    daemonState.value = { ...daemonState.value, book_outline_override: content }
+  }
+}
+
+async function applyEditorActions(actions: UIAction[]) {
+  if (!selectedNovel.value) return
+  const summary = actions.map((action) => `【${action.risk}】${action.label}: ${action.preview || ''}`).join('\n')
+  const highRisk = actions.some((action) => action.risk === 'high')
+  const ok = window.confirm(`${highRisk ? '高风险操作，需要确认。\n' : ''}AI 准备执行：\n${summary}`)
+  if (!ok) return
+  for (const action of actions) {
+    if (action.type === 'rewrite_chapter') {
+      await rewriteCurrentChapter()
+    } else if (action.type === 'rewrite_node') {
+      await submitReviewDecision('rollback')
+    } else if (action.type === 'apply_edit_patch') {
+      const savedActions = editorChatLastTurn.value?.ui_actions
+      editorChatLastTurn.value = { ...(editorChatLastTurn.value as CocreationTurn), ui_actions: [] }
+      await applyEditorPatch()
+      if (editorChatLastTurn.value) editorChatLastTurn.value.ui_actions = savedActions
+    } else if (action.type === 'update_chapter_outline') {
+      await applyOutlineAction(action, 'chapter')
+    } else if (action.type === 'update_book_outline') {
+      await applyOutlineAction(action, 'book')
+    } else if (action.type === 'update_asset') {
+      const key = String(action.target?.key || action.payload?.key || '').trim()
+      const value = String(action.payload?.value || action.payload?.content || '').trim()
+      if (key && value) await saveDeskAsset(key, value)
+    } else if (action.type === 'delete_asset') {
+      const key = String(action.target?.key || action.payload?.key || '').trim()
+      if (key) await saveDeskAsset(key, '')
+    } else if (action.type === 'clear_assets') {
+      const keys = Object.keys(selectedNovel.value.assets || {})
+      for (const key of keys) await saveDeskAsset(key, '')
+    }
+  }
+  editorChatLastTurn.value = { ...(editorChatLastTurn.value as CocreationTurn), ui_actions: [] }
+  await loadNovel(selectedNovel.value.id)
+  appNotice.value = 'AI 操作已执行。'
+}
+
 async function applyEditorPatch() {
+  const actions = (editorChatLastTurn.value?.ui_actions || []) as UIAction[]
+  if (actions.length) {
+    await applyEditorActions(actions)
+    return
+  }
   const patch = editorChatLastTurn.value?.edit_patch as EditPatch | undefined
   if (!patch || patch.target === 'none' || patch.mode === 'none' || !patch.content.trim()) {
     appNotice.value = '当前没有可应用的 AI 修改。'
@@ -459,6 +566,14 @@ async function applyEditorPatch() {
     currentChapterText.value = patch.mode === 'replace' ? patch.content : `${currentChapterText.value}${currentChapterText.value ? '\n\n' : ''}${patch.content}`
     await saveCurrentChapter()
     appNotice.value = 'AI 修改已应用到当前章节。'
+    return
+  }
+  if (patch.target === 'span') {
+    const start = Math.max(0, Math.min(currentChapterText.value.length, Number(patch.span?.start || 0)))
+    const end = Math.max(start, Math.min(currentChapterText.value.length, Number(patch.span?.end || currentChapterText.value.length)))
+    currentChapterText.value = `${currentChapterText.value.slice(0, start)}${patch.content}${currentChapterText.value.slice(end)}`
+    await saveCurrentChapter()
+    appNotice.value = 'AI 修改已应用到当前段落，其他正文保持不变。'
   }
 }
 
@@ -496,6 +611,12 @@ async function startWriting() {
       api_key: writingForm.apiKey,
       api_base_url: writingForm.apiBaseUrl,
       model: writingForm.model,
+      planning_model: writingForm.planningModel || writingForm.model,
+      writing_model: writingForm.writingModel || writingForm.model,
+      writing_api_key: writingForm.writingApiKey || writingForm.apiKey,
+      writing_api_base_url: writingForm.writingApiBaseUrl || writingForm.apiBaseUrl,
+      review_model: writingForm.reviewModel || writingForm.model,
+      fast_model: writingForm.writingModel || writingForm.model,
       semi_auto: !fullAutoMode.value,
     })
     appNotice.value = `守护进程已启动：${result.novel_id}`
@@ -523,6 +644,27 @@ async function resumeWriting() {
   }
 }
 
+async function rewriteCurrentChapter() {
+  if (!selectedNovel.value) {
+    appNotice.value = '请先选择作品。'
+    return
+  }
+  const ok = window.confirm('确定重写本章？这会清空本章正文和已通过小节，从第 1 节重新开始。')
+  if (!ok) return
+  try {
+    await api.rewriteChapter({ novel_id: selectedNovel.value.id, chapter_index: currentChapterIndex.value })
+    currentChapterText.value = ''
+    currentNodeText.value = ''
+    selectedNodeId.value = ''
+    await refreshStatus(selectedNovel.value.id)
+    await loadNovel(selectedNovel.value.id)
+    appNotice.value = '本章已清空，正在从第 1 节重新写。'
+    await startWriting()
+  } catch (error) {
+    appNotice.value = `重写本章失败：${String(error)}`
+  }
+}
+
 async function submitReviewDecision(action: 'approve' | 'rewrite' | 'rollback') {
   try {
     const reviewContent = reviewEditContent.value || selectedNode.value?.content || ''
@@ -539,7 +681,15 @@ async function submitReviewDecision(action: 'approve' | 'rewrite' | 'rollback') 
     reviewInstructions.value = ''
     await refreshStatus()
   } catch (error) {
-    appNotice.value = `审阅提交失败：${String(error)}`
+    const message = String(error)
+    if (message.includes('no pending review node') || message.includes('409 Conflict')) {
+      await refreshStatus()
+      reviewEditContent.value = ''
+      reviewInstructions.value = ''
+      appNotice.value = '待审状态已经过期，已自动刷新。'
+      return
+    }
+    appNotice.value = `审阅提交失败：${message}`
   }
 }
 
@@ -730,7 +880,9 @@ onMounted(async () => {
         @save-node="saveCurrentNode"
         @toggle-node-lock="toggleNodeLock"
         @review-decision="submitReviewDecision"
+        @rewrite-chapter="rewriteCurrentChapter"
         @analyze-current-text="analyzeCurrentText"
+        @save-desk-asset="saveDeskAsset"
         @back-to-bookcase="go('bookcase')"
       />
 

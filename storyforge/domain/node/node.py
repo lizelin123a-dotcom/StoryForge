@@ -13,6 +13,11 @@ class ChapterNode(BaseModel):
     node_type: str
     expected_word_count: int = Field(ge=0)
     content: Optional[str] = None
+    segment_function: str = ""
+    what_to_write: str = ""
+    ends_with: str = ""
+    characters: list[str] = Field(default_factory=list)
+    micro_payoff: str = ""
 
 
 class WritingFourQuestions(BaseModel):

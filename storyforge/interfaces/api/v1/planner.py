@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from storyforge.application.audit.services.outline_check_service import check_chapter_outline
 from storyforge.application.planner.services.act_planner import generate_act_plans
-from storyforge.application.planner.services.chapter_outliner import generate_chapter_outline
+from storyforge.application.planner.services.chapter_outliner import generate_chapter_outline, normalize_chapter_outline
 from storyforge.application.planner.services.macro_planner import generate_macro_outline
 from storyforge.application.writer.services.consistency_checker import check_node_consistency
 from storyforge.application.writer.services.node_generator import generate_node_content
@@ -81,9 +81,9 @@ def act_plans(outline_id: str) -> dict[str, Any]:
 def chapter_outline(act_index: int, request: ChapterOutlineRequest) -> dict[str, Any]:
     with SessionLocal() as session:
         act_plan = _find_act_plan(session, act_index)
-        nodes = generate_chapter_outline(act_plan, request.chapter_index, request.chapter_function)
+        outline = generate_chapter_outline(act_plan, request.chapter_index, request.chapter_function)
         chapter_id = f"chapter-{request.chapter_index}"
-        outline_json = [node.model_dump() for node in nodes]
+        outline_json = normalize_chapter_outline(outline, request.chapter_index, request.chapter_function)
         repo = CRUDRepository(session, ChapterOutlineModel)
         existing = _get_chapter_outline_row(session, chapter_id)
         payload = {"id": existing.id if existing else str(uuid4()), "chapter_id": chapter_id, "outline_json": outline_json}
@@ -91,7 +91,8 @@ def chapter_outline(act_index: int, request: ChapterOutlineRequest) -> dict[str,
             repo.create(payload)
         else:
             repo.update(existing.id, payload)
-        return {"chapter_id": chapter_id, "nodes": outline_json}
+        check_result = check_chapter_outline(outline_json)
+        return {"chapter_id": chapter_id, "outline": outline_json, "nodes": outline_json["nodes"], "check": check_result}
 
 
 @router.post("/api/v1/planner/chapter-outline/{chapter_id}/check")
@@ -100,8 +101,8 @@ def check_outline(chapter_id: str) -> dict[str, Any]:
         row = _get_chapter_outline_row(session, chapter_id)
         if row is None:
             raise HTTPException(status_code=404, detail="chapter outline not found")
-        nodes = [ChapterNode(**node) for node in row.outline_json]
-        return check_chapter_outline(nodes)
+        outline_json = normalize_chapter_outline(row.outline_json, _chapter_index_from_id(chapter_id))
+        return check_chapter_outline(outline_json)
 
 
 @router.post("/api/v1/writer/generate-node")
@@ -132,3 +133,10 @@ def _find_act_plan(session, act_index: int) -> dict[str, Any]:
             if int(act.get("index", -1)) == act_index:
                 return act
     return {"index": act_index, "name": f"第{act_index}幕", "function": "推进主线", "core_conflict": "主角目标与阻碍冲突", "chapters": []}
+
+
+def _chapter_index_from_id(chapter_id: str) -> int:
+    try:
+        return int(str(chapter_id).rsplit("-", 1)[-1])
+    except Exception:
+        return 1

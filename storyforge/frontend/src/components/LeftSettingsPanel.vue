@@ -16,6 +16,9 @@ defineProps<{
     apiKey: string
     apiBaseUrl: string
     model: string
+    planningModel: string
+    writingModel: string
+    reviewModel: string
   }
   fullAutoMode: boolean
   dissectSourceId: string
@@ -89,18 +92,27 @@ const emit = defineEmits<{
           <div v-if="editorChatLastTurn?.edit_patch?.target && editorChatLastTurn.edit_patch.target !== 'none'" class="patch-card">
             <strong>AI 可应用修改 · {{ editorChatLastTurn.edit_patch.target }} / {{ editorChatLastTurn.edit_patch.mode }}</strong>
             <p>{{ editorChatLastTurn.edit_patch.content }}</p>
-            <button class="sf-btn sf-btn--success w-full" @click="emit('applyEditorPatch')">应用到当前{{ editorChatLastTurn.edit_patch.target === 'node' ? '节点' : '章节' }}</button>
+            <button class="sf-btn sf-btn--success w-full" @click="emit('applyEditorPatch')">应用到当前{{ editorChatLastTurn.edit_patch.target === 'node' ? '节点' : editorChatLastTurn.edit_patch.target === 'span' ? '段落' : '章节' }}</button>
           </div>
           <div class="field-grid">
             <label>目标字数<input v-model.number="writingForm.target_word_count" type="number" /></label>
             <label>类型<input v-model="writingForm.genre" readonly /></label>
           </div>
+          <section class="model-connect-panel">
+            <p class="section-kicker">模型接入</p>
+            <label>DeepSeek API Key<input v-model="writingForm.apiKey" type="password" placeholder="sk-..." /></label>
+            <label>DeepSeek API Base URL<input v-model="writingForm.apiBaseUrl" placeholder="https://api.deepseek.com/v1" /></label>
+            <div class="field-grid">
+              <label>默认模型<input v-model="writingForm.model" placeholder="deepseek-chat" /></label>
+              <label>正文模型<input v-model="writingForm.writingModel" placeholder="deepseek-chat" /></label>
+            </div>
+            <p class="muted-line">正文建议用 deepseek-chat。GPT 不建议写正文。</p>
+          </section>
           <label class="danger-toggle"><input :checked="fullAutoMode" type="checkbox" @change="emit('update:fullAutoMode', ($event.target as HTMLInputElement).checked)" /> 全自动模式：跳过节点审阅并直接写入正文</label>
           <details class="advanced-config">
             <summary>高级配置</summary>
-            <label>API Key<input v-model="writingForm.apiKey" type="password" /></label>
-            <label>LLM API Base URL<input v-model="writingForm.apiBaseUrl" /></label>
-            <label>模型选择<input v-model="writingForm.model" /></label>
+            <label>规划模型<input v-model="writingForm.planningModel" placeholder="deepseek-chat" /></label>
+            <label>审稿模型<input v-model="writingForm.reviewModel" placeholder="deepseek-chat" /></label>
             <label>对标素材 ID<input :value="dissectSourceId" @input="emit('update:dissectSourceId', ($event.target as HTMLInputElement).value)" /></label>
           </details>
         </div>

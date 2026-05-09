@@ -242,10 +242,12 @@ def upsert_novel_assets(novel_id: str, assets: dict[str, Any]) -> dict[str, str]
     with SessionLocal() as session:
         for key, value in assets.items():
             text = str(value or "").strip()
-            if not text:
-                continue
             asset_id = f"{novel_id}:asset:{key}"
             row = session.get(NovelAssetModel, asset_id)
+            if not text:
+                if row is not None:
+                    session.delete(row)
+                continue
             if row is None:
                 row = NovelAssetModel(id=asset_id, novel_id=novel_id, key=str(key), value=text, created_at=now, updated_at=now)
                 session.add(row)

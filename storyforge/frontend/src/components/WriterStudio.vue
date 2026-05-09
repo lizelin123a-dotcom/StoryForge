@@ -27,6 +27,11 @@ const props = defineProps<{
     apiKey: string
     apiBaseUrl: string
     model: string
+    planningModel: string
+    writingModel: string
+    writingApiKey: string
+    writingApiBaseUrl: string
+    reviewModel: string
   }
   editorChatMessages: CocreationMessage[]
   editorChatLoading: boolean
@@ -81,8 +86,10 @@ const emit = defineEmits<{
   saveNode: []
   toggleNodeLock: [node: NodeDraft]
   reviewDecision: [action: 'approve' | 'rewrite' | 'rollback']
+  rewriteChapter: []
   analyzeCurrentText: []
   backToBookcase: []
+  saveDeskAsset: [key: string, value: string]
 }>()
 
 const debugOpen = ref(false)
@@ -112,10 +119,13 @@ const writingCard = computed(() => (props.daemonState.writing_card as WritingCar
         :editor-chat-last-turn="editorChatLastTurn"
         :editor-skills="editorSkills"
         :selected-skill-ids="selectedSkillIds"
+        :writing-form="writingForm"
+        :full-auto-mode="fullAutoMode"
         @update:editor-chat-input="emit('update:editorChatInput', $event)"
         @send-editor-chat="emit('sendEditorChat')"
         @apply-editor-patch="emit('applyEditorPatch')"
         @toggle-editor-skill="emit('toggleEditorSkill', $event)"
+        @update:full-auto-mode="emit('update:fullAutoMode', $event)"
       />
     </NotebookPage>
 
@@ -134,12 +144,16 @@ const writingCard = computed(() => (props.daemonState.writing_card as WritingCar
         :has-pending-review="hasPendingReview"
         :pending-node-title="pendingNodeTitle"
         :current-node-text="currentNodeText"
+        :pending-node="pendingNode"
+        :novel-assets="selectedNovel?.assets || {}"
+        :daemon-state="daemonState"
         @update:current-chapter-text="emit('update:currentChapterText', $event)"
         @update:current-node-text="emit('update:currentNodeText', $event)"
         @analyze-current-text="emit('analyzeCurrentText')"
         @save-node="emit('saveNode')"
         @toggle-node-lock="emit('toggleNodeLock', $event)"
         @review-decision="emit('reviewDecision', $event)"
+        @rewrite-chapter="emit('rewriteChapter')"
       />
     </NotebookPage>
 
@@ -148,6 +162,7 @@ const writingCard = computed(() => (props.daemonState.writing_card as WritingCar
       :title="selectedNovel?.title || ''"
       :asset-entries="assetEntries"
       @toggle="emit('update:settingOpen', !settingOpen)"
+      @save-asset="(key, value) => emit('saveDeskAsset', key, value)"
     />
 
     <template #tabs>

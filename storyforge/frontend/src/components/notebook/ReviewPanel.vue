@@ -7,10 +7,12 @@ defineProps<{
   hasPendingReview: boolean
   pendingNodeTitle: string
   currentNodeText: string
+  reviewInstructions: string
 }>()
 
 const emit = defineEmits<{
   'update:currentNodeText': [value: string]
+  'update:reviewInstructions': [value: string]
   saveNode: []
   toggleNodeLock: [node: NodeDraft]
   reviewDecision: [action: 'approve' | 'rewrite' | 'rollback']
@@ -26,6 +28,20 @@ const emit = defineEmits<{
         <strong>{{ pendingNodeTitle }}</strong>
         <span>先改，再写入正文。</span>
       </div>
+
+      <div class="review-reason-row">
+        <button class="reason-chip" @click="emit('update:reviewInstructions', '文风不对：不要文艺氛围，写动作、对话、冲突')">文风</button>
+        <button class="reason-chip" @click="emit('update:reviewInstructions', '节奏太慢：开头给冲突，每段推进压迫或反击')">节奏</button>
+        <button class="reason-chip" @click="emit('update:reviewInstructions', '角色行为不对：主角要主动选择和反压，不要被动观察')">角色</button>
+        <button class="reason-chip" @click="emit('update:reviewInstructions', '章纲目标不对：校正本节点剧情方向，不要沿用上一版重心')">章纲</button>
+        <button class="reason-chip" @click="emit('update:reviewInstructions', '重复上一版：换开头、换场景调度、换信息顺序')">重复</button>
+      </div>
+      <input
+        :value="reviewInstructions"
+        class="review-instruction-input"
+        placeholder="换一版原因，可不填。例：主角太被动，直接逼对方接退婚书"
+        @input="emit('update:reviewInstructions', ($event.target as HTMLInputElement).value)"
+      />
 
       <div class="review-actions review-actions--top">
         <button class="sf-btn sf-btn--danger" title="清空本章正文和已通过小节，从第 1 节重来" @click="emit('rewriteChapter')">重写本章</button>

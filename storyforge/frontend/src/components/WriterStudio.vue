@@ -87,6 +87,8 @@ const emit = defineEmits<{
   toggleNodeLock: [node: NodeDraft]
   reviewDecision: [action: 'approve' | 'rewrite' | 'rollback']
   rewriteChapter: []
+  regenerateOutline: []
+  rollbackNode: [reason: string]
   analyzeCurrentText: []
   backToBookcase: []
   saveDeskAsset: [key: string, value: string]
@@ -144,16 +146,20 @@ const writingCard = computed(() => (props.daemonState.writing_card as WritingCar
         :has-pending-review="hasPendingReview"
         :pending-node-title="pendingNodeTitle"
         :current-node-text="currentNodeText"
+        :review-instructions="reviewInstructions"
         :pending-node="pendingNode"
         :novel-assets="selectedNovel?.assets || {}"
         :daemon-state="daemonState"
         @update:current-chapter-text="emit('update:currentChapterText', $event)"
         @update:current-node-text="emit('update:currentNodeText', $event)"
+        @update:review-instructions="emit('update:reviewInstructions', $event)"
         @analyze-current-text="emit('analyzeCurrentText')"
         @save-node="emit('saveNode')"
         @toggle-node-lock="emit('toggleNodeLock', $event)"
         @review-decision="emit('reviewDecision', $event)"
         @rewrite-chapter="emit('rewriteChapter')"
+        @regenerate-outline="emit('regenerateOutline')"
+        @rollback-node="emit('rollbackNode', $event)"
       />
     </NotebookPage>
 

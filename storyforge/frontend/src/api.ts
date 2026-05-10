@@ -209,6 +209,8 @@ export const api = {
   rollbackNode: (data: JsonRecord) => request<JsonRecord>('/api/v1/daemon/review/rollback', { method: 'POST', body: JSON.stringify(data) }),
   rewriteChapter: (data: { novel_id: string; chapter_index: number; reset_outline?: boolean }) =>
     request<JsonRecord>('/api/v1/daemon/rewrite-chapter', { method: 'POST', body: JSON.stringify(data) }),
+  regenerateOutline: (data: { novel_id: string; chapter_index: number }) =>
+    request<JsonRecord>('/api/v1/daemon/regenerate-outline', { method: 'POST', body: JSON.stringify(data) }),
 
   events: () => `${getApiBase().replace(/\/$/, '')}/api/v1/daemon/events`,
 }

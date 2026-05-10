@@ -9,9 +9,11 @@ LLMCaller = Callable[[str, str, bool], str]
 
 NODE_TYPES = {"hook", "setup", "conflict", "pressure", "burst", "aftermath", "harvest", "newsetup"}
 SEGMENT_FUNCTIONS = {"atmosphere", "character_beat", "dialogue_push", "action_beat", "revelation", "emotional_landing", "transition"}
+CONFLICT_GENRES = ("退婚", "打脸", "压迫", "反套路", "废柴", "夺运", "婚约", "羞辱")
 SYSTEM_PROMPT = """你是章节级网文章纲规划专家。
 你必须同时完成章节总控和节点规划：memo、emotional_design、5-9 个节点。
-第一个节点 hook，至少一个 burst，最后一个 newsetup。
+第一个节点 hook，但必须带明确冲突/阻碍/目标，不能只写氛围。
+至少一个 burst，最后一个 newsetup。
 节点类型只能是 hook/setup/conflict/pressure/burst/aftermath/harvest/newsetup。
 segment_function 只能是 atmosphere/character_beat/dialogue_push/action_beat/revelation/emotional_landing/transition。
 必须输出 JSON object。
@@ -66,7 +68,7 @@ def generate_chapter_outline(
 
 要求：
 1. 每章 5-9 个节点，每节点 200-500 字。
-2. 开篇第一节点必须 hook；整章至少一个 burst；结尾节点必须 newsetup。
+2. 开篇第一节点必须 hook，但要在第一节点里写出具体冲突、目标和阻碍；整章至少一个 burst；结尾节点必须 newsetup。
 3. 每个节点必须填写 what_to_write 和 ends_with。ends_with 必须是可感知画面，不是总结。
 4. 禁止使用“本章讲述了、主角经历了、他意识到、这意味着、通过X展现Y、情感升华、不是X而是Y”。
 5. 读者期待必须具体，不能只写“期待后续发展”。
@@ -120,6 +122,7 @@ def _normalize_nodes(raw_nodes: list[Any], chapter_index: int, chapter_function:
         nodes_data.append(_fallback_nodes(chapter_index, "补足节点")[len(nodes_data)])
 
     nodes_data[0]["node_type"] = "hook"
+    nodes_data[0]["segment_function"] = _opening_segment_function(chapter_function)
     if not any(str(item.get("node_type", "")).lower() == "burst" for item in nodes_data):
         nodes_data[min(4, len(nodes_data) - 2)]["node_type"] = "burst"
     nodes_data[-1]["node_type"] = "newsetup"
@@ -191,11 +194,18 @@ def _normalize_emotional_design(raw: Any, nodes: list[ChapterNode]) -> dict[str,
     }
 
 
+def _opening_segment_function(chapter_function: str) -> str:
+    text = str(chapter_function or "")
+    if any(token in text for token in CONFLICT_GENRES):
+        return "dialogue_push"
+    return "action_beat"
+
+
 def _default_segment_function(node_type: str, idx: int, total: int) -> str:
     if idx == total:
         return "emotional_landing"
     return {
-        "hook": "atmosphere",
+        "hook": "dialogue_push",
         "setup": "character_beat",
         "conflict": "dialogue_push",
         "pressure": "action_beat",
@@ -234,7 +244,7 @@ def _fallback_outline(chapter_index: int, chapter_function: str) -> dict[str, An
 
 def _fallback_nodes(chapter_index: int, chapter_function: str) -> list[dict[str, Any]]:
     return [
-        {"index": 1, "node_type": "hook", "segment_function": "atmosphere", "trigger_point": "突发危机或悬念抛出", "emotion_purpose": "立刻抓住读者注意", "reader_expectation": "想知道主角如何应对", "what_to_write": "用一个异常细节打开场面，让主角被迫注意到问题。", "ends_with": "异常细节停在主角眼前。", "expected_word_count": 300},
+        {"index": 1, "node_type": "hook", "segment_function": "dialogue_push", "trigger_point": "冲突当场压到主角面前", "emotion_purpose": "立刻让读者进入对抗关系", "reader_expectation": "想知道主角会如何反压回去", "what_to_write": "开头三句内写清谁来、要做什么、谁在阻拦；用动作和对话打开场面，不铺氛围。", "ends_with": "阻拦者把规矩或羞辱摆到主角面前。", "expected_word_count": 300},
         {"index": 2, "node_type": "setup", "segment_function": "character_beat", "trigger_point": "补充当前局势与角色目标", "emotion_purpose": "建立期待", "reader_expectation": "期待矛盾升级", "what_to_write": "让角色通过动作和对话确认眼前目标。", "ends_with": "角色把目标落到一个具体行动上。", "expected_word_count": 300},
         {"index": 3, "node_type": "conflict", "segment_function": "dialogue_push", "trigger_point": "反派或阻碍正面出现", "emotion_purpose": "制造紧张", "reader_expectation": "期待主角反击", "what_to_write": "阻碍当场出现，对话里带出代价和限制。", "ends_with": "阻碍压到主角面前，退路变窄。", "expected_word_count": 350},
         {"index": 4, "node_type": "pressure", "segment_function": "action_beat", "trigger_point": "形势继续恶化", "emotion_purpose": "压出憋屈和焦虑", "reader_expectation": "期待底牌", "what_to_write": "让局势进一步失控，主角付出可见代价。", "ends_with": "主角被逼到必须选择的位置。", "expected_word_count": 400},

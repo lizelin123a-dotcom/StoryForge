@@ -224,6 +224,8 @@ function normalizeNodeDrafts(rows: unknown[]): NodeDraft[] {
     target_words: Number(row.target_words || 0),
     actual_words: Number(row.actual_words || String(row.content || '').length),
     updated_at: String(row.updated_at || ''),
+    revision_id: String(row.revision_id || ''),
+    attempt_no: Number(row.attempt_no || 0),
   }))
 }
 
@@ -296,16 +298,14 @@ function applyEvent(event: SseEvent) {
   if ((event.type === 'node_draft_generated' || event.type === 'node_generated') && event.data?.content && (!selectedNovelId.value || event.state?.novel_id === selectedNovelId.value)) {
     const index = Math.max(0, (Number(event.data.chapter_index) || 1) - 1)
     while (chapters.value.length <= index) chapters.value.push({ title: `第 ${chapters.value.length + 1} 章`, content: '', nodeLabel: '写作中', nodesDone: 0, nodesTotal: 7 })
-    if (event.type === 'node_generated' && event.data.reviewed) {
-      chapters.value[index].content += `${chapters.value[index].content ? '\n\n' : ''}${String(event.data.content)}`
-      chapters.value[index].dirty = false
-    }
     upsertNodeDraft({
       id: `${event.state?.novel_id || selectedNovelId.value}:chapter:${index + 1}:node:${Number(event.data.node_index) || 1}`,
       chapter_index: index + 1,
       node_index: Number(event.data.node_index) || 1,
       node_type: String(event.data.node_type || '节点'),
       content: String(event.data.content || ''),
+      revision_id: String(event.data.revision_id || ''),
+      attempt_no: Number(event.data.attempt_no || 1),
       locked: false,
       source: 'ai',
     })
@@ -471,7 +471,8 @@ async function saveDeskAsset(key: string, value: string) {
     return
   }
   try {
-    const result = await api.saveAssets(selectedNovel.value.id, { assets: { [cleanKey]: cleanValue } })
+    const shouldMarkDirty = !cleanKey.startsWith('chapter_outline') && !cleanKey.startsWith('book_outline') && cleanKey !== 'assets_dirty'
+    const result = await api.saveAssets(selectedNovel.value.id, { assets: { [cleanKey]: cleanValue, ...(shouldMarkDirty ? { assets_dirty: 'true' } : {}) } })
     selectedNovel.value = { ...selectedNovel.value, assets: result.assets }
     appNotice.value = cleanValue ? `案头设定“${cleanKey}”已按你的版本保存。AI 后续会以这里为准。` : `案头设定“${cleanKey}”已删除。`
   } catch (error) {
@@ -487,7 +488,8 @@ async function applyOutlineAction(action: UIAction, scope: 'chapter' | 'book') {
     return
   }
   const key = scope === 'chapter' ? `chapter_outline:${currentChapterIndex.value}` : 'book_outline_override'
-  const result = await api.saveAssets(selectedNovel.value.id, { assets: { [key]: content } })
+  const dirtyKey = scope === 'chapter' ? `chapter_outline_dirty:${currentChapterIndex.value}` : 'book_outline_dirty'
+  const result = await api.saveAssets(selectedNovel.value.id, { assets: { [key]: content, [dirtyKey]: 'true' } })
   selectedNovel.value = { ...selectedNovel.value, assets: result.assets }
   if (scope === 'chapter') {
     daemonState.value = {
@@ -496,6 +498,7 @@ async function applyOutlineAction(action: UIAction, scope: 'chapter' | 'book') {
         ...((daemonState.value.current_chapter_outline as Record<string, unknown>) || {}),
         chapter_index: currentChapterIndex.value,
         override_text: content,
+        dirty: true,
       },
     }
   } else {
@@ -665,17 +668,35 @@ async function rewriteCurrentChapter() {
   }
 }
 
+async function regenerateCurrentOutline() {
+  if (!selectedNovel.value) {
+    appNotice.value = '请先选择作品。'
+    return
+  }
+  try {
+    const result = await api.regenerateOutline({ novel_id: selectedNovel.value.id, chapter_index: currentChapterIndex.value })
+    if (result.state) daemonState.value = result.state as DaemonState
+    await refreshStatus(selectedNovel.value.id)
+    await loadNovel(selectedNovel.value.id)
+    appNotice.value = '当前章纲已重做。正文没有改动。'
+  } catch (error) {
+    appNotice.value = `重做章纲失败：${String(error)}`
+  }
+}
+
+async function rollbackCurrentNode(reason: string) {
+  reviewInstructions.value = reason
+  await submitReviewDecision('rollback')
+}
+
 async function submitReviewDecision(action: 'approve' | 'rewrite' | 'rollback') {
   try {
     const reviewContent = reviewEditContent.value || selectedNode.value?.content || ''
-    const payload = { content: String(reviewContent || ''), instructions: reviewInstructions.value }
+    const payload = { content: String(reviewContent || ''), instructions: reviewInstructions.value, revision_id: String(pendingNode.value?.revision_id || selectedNode.value?.revision_id || '') }
     const payloadWithNovel = { ...payload, novel_id: selectedNovelId.value }
     if (action === 'approve') await api.approveNode(payloadWithNovel)
     if (action === 'rewrite') await api.rewriteNode(payloadWithNovel)
-    if (action === 'rollback') await api.rollbackNode({ novel_id: selectedNovelId.value, instructions: reviewInstructions.value })
-    if (action !== 'rollback' && reviewContent.trim()) {
-      currentChapterText.value = `${currentChapterText.value}${currentChapterText.value.trim() ? '\n\n' : ''}${reviewContent}`
-    }
+    if (action === 'rollback') await api.rollbackNode({ novel_id: selectedNovelId.value, instructions: reviewInstructions.value, revision_id: String(pendingNode.value?.revision_id || selectedNode.value?.revision_id || '') })
     appNotice.value = action === 'approve' ? '审阅已通过，内容已写入正文。' : action === 'rewrite' ? '已按当前编辑内容写入正文。' : '已要求 AI 换一版当前小节。'
     reviewEditContent.value = ''
     reviewInstructions.value = ''
@@ -881,6 +902,8 @@ onMounted(async () => {
         @toggle-node-lock="toggleNodeLock"
         @review-decision="submitReviewDecision"
         @rewrite-chapter="rewriteCurrentChapter"
+        @regenerate-outline="regenerateCurrentOutline"
+        @rollback-node="rollbackCurrentNode"
         @analyze-current-text="analyzeCurrentText"
         @save-desk-asset="saveDeskAsset"
         @back-to-bookcase="go('bookcase')"

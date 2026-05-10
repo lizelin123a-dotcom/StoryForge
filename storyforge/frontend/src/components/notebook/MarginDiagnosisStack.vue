@@ -15,6 +15,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   analyzeCurrentText: []
+  rewriteChapter: []
+  regenerateOutline: []
+  rollbackNode: [reason: string]
 }>()
 
 const reviewOpen = ref(false)
@@ -32,6 +35,8 @@ const lastRejected = computed(() => parseAssetObject(manualReview.value.last_rej
 const runtimeMemory = computed(() => (props.daemonState?.runtime_memory || {}) as Record<string, unknown>)
 const currentOutline = computed(() => parseOutline(props.daemonState?.current_chapter_outline))
 const outlineOverride = computed(() => textOf(assets.value[`chapter_outline:${props.activeChapter || 1}`]) || textOf((currentOutline.value as Record<string, unknown>).override_text))
+const outlineDirty = computed(() => textOf(assets.value[`chapter_outline_dirty:${props.activeChapter || 1}`]) === 'true' || Boolean((currentOutline.value as Record<string, unknown>).dirty))
+const assetsDirty = computed(() => textOf(assets.value.assets_dirty) === 'true')
 const macroOutline = computed(() => parseOutline(props.daemonState?.macro_outline))
 const actPlans = computed(() => Array.isArray(props.daemonState?.act_plans) ? props.daemonState?.act_plans as unknown[] : [])
 
@@ -206,6 +211,17 @@ function textOf(value: unknown): string {
         <strong>当前章纲</strong>
         <span>{{ outlineNodes.length ? `${outlineNodes.length} 节` : '暂无' }}</span>
       </button>
+      <div v-if="outlineOpen && assetsDirty" class="outline-dirty-line outline-dirty-action">
+        <span>案头设定已变更，当前章纲可能过期。可以先只重做章纲，再决定是否重写。</span>
+        <button class="sf-btn sf-btn--warning" @click="emit('regenerateOutline')">只重做章纲</button>
+        <button class="sf-btn sf-btn--danger" @click="emit('rewriteChapter')">按新设定重写本章</button>
+      </div>
+      <div v-if="outlineOpen && outlineDirty" class="outline-dirty-line outline-dirty-action">
+        <span>章纲已变更，旧正文/旧小节可能不再匹配。</span>
+        <button class="sf-btn sf-btn--warning" @click="emit('regenerateOutline')">只重做章纲</button>
+        <button class="sf-btn sf-btn--warning" @click="emit('rollbackNode', '章纲已变更：按新章纲重写当前小节，不要沿用旧小节重心')">重写当前小节</button>
+        <button class="sf-btn sf-btn--danger" @click="emit('rewriteChapter')">重写本章</button>
+      </div>
       <p v-if="outlineOpen && outlineOverride" class="outline-override-text">{{ outlineOverride }}</p>
       <ol v-if="outlineOpen && !outlineOverride && outlineNodes.length" class="outline-list">
         <li v-for="node in outlineNodes" :key="String(node.index || node.node_index)">

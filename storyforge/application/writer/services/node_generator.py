@@ -119,6 +119,16 @@ def literary_risk(text: str) -> dict[str, Any]:
     return {"score": min(100, score), "hits": hits[:12]}
 
 
+def node_quality_report(text: str) -> dict[str, Any]:
+    literary = literary_risk(text)
+    rhythm = webnovel_rhythm_risk(text)
+    score = max(int(literary.get("score") or 0), int(rhythm.get("score") or 0))
+    issues = []
+    issues.extend(literary.get("hits") or [])
+    issues.extend(rhythm.get("reasons") or [])
+    return {"score": min(100, score), "passed": score < 30, "issues": issues[:12], "literary": literary, "rhythm": rhythm}
+
+
 def webnovel_rhythm_risk(text: str) -> dict[str, Any]:
     clean = text.strip()
     paragraphs = [p.strip() for p in re.split(r"\n+", clean) if p.strip()]

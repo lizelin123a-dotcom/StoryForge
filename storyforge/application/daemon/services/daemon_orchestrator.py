@@ -14,7 +14,7 @@ from storyforge.application.planner.services.fallback import fallback_notice
 from storyforge.application.planner.services.macro_planner import generate_macro_outline
 from storyforge.application.writer.services.consistency_checker import check_node_consistency
 from storyforge.application.writer.services.four_questions import answer_four_questions
-from storyforge.application.writer.services.node_generator import generate_node_content
+from storyforge.application.writer.services.node_generator import generate_node_content, node_quality_report
 from storyforge.application.daemon.services.context_governance import apply_review_delta, build_governed_context
 from storyforge.domain.dissect.dissected_chapter import DissectedChapter
 from storyforge.domain.node.node import ChapterNode
@@ -23,6 +23,25 @@ from storyforge.infrastructure.persistence.daemon_state_repository import save_d
 from storyforge.infrastructure.persistence.novel_repository import get_novel_assets, list_node_drafts, save_chapter_text, save_node_draft
 
 Listener = Callable[[dict[str, Any]], None]
+
+
+def _build_rollback_instruction(raw: str = "") -> str:
+    text = str(raw or "").strip()
+    base = text or "上一版不满意"
+    rules: list[str] = []
+    if any(word in text for word in ("文风", "文艺", "氛围", "散文", "漂亮")):
+        rules.append("文风不对：删除文艺腔、氛围句、意象堆砌和心理分析，只写动作、对话、信息和冲突。")
+    if any(word in text for word in ("节奏", "慢", "拖", "不网文", "爽点")):
+        rules.append("节奏不对：开头三句内给冲突/目标/阻碍，每段都推进压迫、反击、揭底或选择。")
+    if any(word in text for word in ("角色", "主角", "被动", "行为", "动机")):
+        rules.append("角色行为不对：主角必须有主动动作和明确选择，不能只观察、沉默或被别人推着走。")
+    if any(word in text for word in ("章纲", "节点", "目标", "方向", "剧情")):
+        rules.append("节点目标不对：优先校正本节点写作目标，不能沿用上一版剧情重心。")
+    if any(word in text for word in ("重复", "复读", "一样", "又是")):
+        rules.append("重复问题：禁止复用上一版开头、句式、场景调度、意象和信息顺序。")
+    if not rules:
+        rules.append("下一版必须换写法，不要沿用上一版的开头、节奏、意象、句式和叙述重心；冲突更直给，动作和对话更具体。")
+    return f"{base}\n" + "\n".join(rules)
 
 
 class DaemonOrchestrator:
@@ -156,20 +175,22 @@ class DaemonOrchestrator:
     def add_listener(self, listener: Listener) -> None:
         self.listeners.append(listener)
 
-    def approve_pending_node(self, content: str | None = None, instructions: str = "") -> dict[str, Any]:
-        return self._resolve_pending_node("approved", content, instructions)
+    def approve_pending_node(self, content: str | None = None, instructions: str = "", revision_id: str = "") -> dict[str, Any]:
+        return self._resolve_pending_node("approved", content, instructions, revision_id)
 
-    def rewrite_pending_node(self, content: str | None = None, instructions: str = "") -> dict[str, Any]:
-        return self._resolve_pending_node("rewritten", content, instructions)
+    def rewrite_pending_node(self, content: str | None = None, instructions: str = "", revision_id: str = "") -> dict[str, Any]:
+        return self._resolve_pending_node("rewritten", content, instructions, revision_id)
 
-    def rollback_pending_node(self, instructions: str = "") -> dict[str, Any]:
-        return self._resolve_pending_node("rolled_back", None, instructions)
+    def rollback_pending_node(self, instructions: str = "", revision_id: str = "") -> dict[str, Any]:
+        return self._resolve_pending_node("rolled_back", None, instructions, revision_id)
 
-    def _resolve_pending_node(self, decision: Literal["approved", "rewritten", "rolled_back"], content: str | None, instructions: str) -> dict[str, Any]:
+    def _resolve_pending_node(self, decision: Literal["approved", "rewritten", "rolled_back"], content: str | None, instructions: str, revision_id: str = "") -> dict[str, Any]:
         manual = self.state.setdefault("manual_review", {"enabled": False, "pending": None, "history": [], "instructions": "", "decision": None})
         pending = manual.get("pending")
         if not pending:
             raise ValueError("no pending review node")
+        if revision_id and str(pending.get("revision_id") or "") != revision_id:
+            raise ValueError("stale review revision")
         resolved = dict(pending)
         if content is not None:
             resolved["content"] = content
@@ -179,7 +200,7 @@ class DaemonOrchestrator:
         manual["pending"] = None
         if decision == "rolled_back":
             rejected = str(resolved.get("content") or "")
-            rewrite_instruction = instructions.strip() or "上一版不满意。下一版必须换写法，不要沿用上一版的开头、节奏、意象、句式和叙述重心；冲突更直给，动作和对话更具体。"
+            rewrite_instruction = _build_rollback_instruction(instructions)
             manual["last_rejected"] = {"chapter_index": resolved.get("chapter_index"), "node_index": resolved.get("node_index"), "content": rejected[:1200], "reason": rewrite_instruction}
             manual["decision"] = {"type": decision, "content": content, "instructions": rewrite_instruction}
             manual["instructions"] = f"{rewrite_instruction}\n\n上一版已被拒绝，禁止复用其写法和重点。上一版节选：{rejected[:800]}"
@@ -269,7 +290,15 @@ class DaemonOrchestrator:
         self.state["current_phase"] = "writing"
         self._update_writing_card(chapter_index, 1, 0, [], "chapter_planning", "正在拆分本章小节", chapter_function)
         llm = self._get_llm("writing")
-        outline = generate_chapter_outline(act, chapter_index, chapter_function, llm=self._get_llm("planning"))
+        assets = self.state.get("novel_assets") or get_novel_assets(self.state["novel_id"])
+        outline_override = str((assets or {}).get(f"chapter_outline:{chapter_index}") or "").strip()
+        outline_function = f"{chapter_function}\n\n作者指定章纲覆盖：{outline_override}" if outline_override else chapter_function
+        outline = generate_chapter_outline(act, chapter_index, outline_function, llm=self._get_llm("planning"))
+        if outline_override:
+            outline["author_override"] = outline_override
+            outline.setdefault("memo", {})["current_task"] = outline_override
+        if assets:
+            self.state["novel_assets"] = {**assets, f"chapter_outline_dirty:{chapter_index}": "false", "assets_dirty": "false"}
         nodes = self._outline_to_nodes(outline)
         self.state["current_chapter_outline"] = {
             "chapter_index": chapter_index,
@@ -307,6 +336,7 @@ class DaemonOrchestrator:
             if getattr(questions, "_fallback_reason", ""):
                 self._notify("llm_fallback_used", {"stage": "four_questions", "reason": str(getattr(questions, "_fallback_reason"))})
             filled = generate_node_content(node, context, questions, llm=llm)
+            filled = self._ensure_node_quality(filled, node, context, questions, llm)
             if filled.content and "【本地写作教学规则生成】" in filled.content:
                 self._notify("llm_fallback_used", {"stage": "node_content", "reason": "node generation failed; local writing rules used"})
             locked_override = self._get_locked_node(chapter_index, filled.index)
@@ -315,6 +345,9 @@ class DaemonOrchestrator:
                 self._notify("locked_node_applied", {"chapter_index": chapter_index, "node_index": filled.index, "node_type": filled.node_type})
                 generated_nodes.append(filled)
                 continue
+            attempt_no = self._next_attempt_no(chapter_index, filled.index)
+            revision_id = f"{self.state['novel_id']}:chapter:{chapter_index}:node:{filled.index}:attempt:{attempt_no}"
+            self.state.setdefault("node_attempts", {})[f"{chapter_index}:{filled.index}"] = attempt_no
             save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai_draft", status="drafted", target_words=int(getattr(node, "expected_word_count", 0) or 0))
             self._notify(
                 "node_draft_generated",
@@ -323,11 +356,13 @@ class DaemonOrchestrator:
                     "node_index": filled.index,
                     "node_type": filled.node_type,
                     "content": filled.content,
+                    "revision_id": revision_id,
+                    "attempt_no": attempt_no,
                     "generation_logic": self._build_generation_logic(node, questions, context),
                 },
             )
             while True:
-                reviewed = self._wait_for_node_review(chapter_index, filled, len(nodes), chapter_function)
+                reviewed = self._wait_for_node_review(chapter_index, filled, len(nodes), chapter_function, revision_id=revision_id, attempt_no=attempt_no)
                 if reviewed is not None:
                     filled = reviewed
                     break
@@ -344,8 +379,12 @@ class DaemonOrchestrator:
                 )
                 retry_questions = answer_four_questions(node, retry_context, llm=llm)
                 filled = generate_node_content(node, retry_context, retry_questions, llm=llm)
+                filled = self._ensure_node_quality(filled, node, retry_context, retry_questions, llm)
+                attempt_no = self._next_attempt_no(chapter_index, filled.index)
+                revision_id = f"{self.state['novel_id']}:chapter:{chapter_index}:node:{filled.index}:attempt:{attempt_no}"
+                self.state.setdefault("node_attempts", {})[f"{chapter_index}:{filled.index}"] = attempt_no
                 save_node_draft(self.state["novel_id"], chapter_index, filled.index, filled.node_type, filled.content or "", locked=False, source="ai_redraw", status="drafted", target_words=int(getattr(node, "expected_word_count", 0) or 0))
-                self._notify("node_draft_generated", {"chapter_index": chapter_index, "node_index": filled.index, "node_type": filled.node_type, "content": filled.content, "generation_logic": self._build_generation_logic(node, retry_questions, retry_context)})
+                self._notify("node_draft_generated", {"chapter_index": chapter_index, "node_index": filled.index, "node_type": filled.node_type, "content": filled.content, "revision_id": revision_id, "attempt_no": attempt_no, "generation_logic": self._build_generation_logic(node, retry_questions, retry_context)})
             generated_nodes.append(filled)
             self._notify(
                 "node_generated",
@@ -405,6 +444,11 @@ class DaemonOrchestrator:
             elif isinstance(item, dict):
                 nodes.append(ChapterNode(**item))
         return nodes
+
+    def _next_attempt_no(self, chapter_index: int, node_index: int) -> int:
+        attempts = dict(self.state.get("node_attempts") or {})
+        key = f"{chapter_index}:{node_index}"
+        return int(attempts.get(key) or 0) + 1
 
     def _approved_node_indexes(self, chapter_index: int) -> list[int]:
         locked_nodes = self.state.get("locked_nodes") or list_node_drafts(self.state["novel_id"], locked_only=True)
@@ -478,7 +522,7 @@ class DaemonOrchestrator:
             score -= 10
         return min(max(score, 0), 100)
 
-    def _wait_for_node_review(self, chapter_index: int, node: ChapterNode, planned_nodes: int, chapter_title: str) -> ChapterNode | None:
+    def _wait_for_node_review(self, chapter_index: int, node: ChapterNode, planned_nodes: int, chapter_title: str, revision_id: str = "", attempt_no: int = 1) -> ChapterNode | None:
         manual = self.state.setdefault("manual_review", {"enabled": False, "pending": None, "history": [], "instructions": "", "decision": None})
         if not manual.get("enabled"):
             manual["pending"] = None
@@ -489,6 +533,8 @@ class DaemonOrchestrator:
             "chapter_index": chapter_index,
             "node_index": node.index,
             "node_type": node.node_type,
+            "revision_id": revision_id,
+            "attempt_no": attempt_no,
             "trigger_point": node.trigger_point,
             "emotion_purpose": node.emotion_purpose,
             "reader_expectation": node.reader_expectation,
@@ -521,6 +567,23 @@ class DaemonOrchestrator:
             self._update_writing_card(chapter_index, next_index, planned_nodes, completed_nodes, "node_approved", f"第 {node.index} 节已写入正文，可继续增删调整小节", chapter_title)
             return node.model_copy(update={"content": content})
         return node
+
+    def _ensure_node_quality(self, filled: ChapterNode, node: ChapterNode, context: Any, questions: Any, llm: Callable[[str, str, bool], str]) -> ChapterNode:
+        report = node_quality_report(filled.content or "")
+        if report.get("passed"):
+            return filled
+        stricter_context = dict(context) if isinstance(context, dict) else {"base_context": str(context)}
+        stricter_context["node_quality_gate"] = {
+            "failed_previous_draft": filled.content or "",
+            "issues": report.get("issues") or [],
+            "required_fix": "重写当前小节。开头必须给冲突/目标/阻碍；删氛围和意象；用动作、对话、压迫、反击推进；不得重复上一版。",
+        }
+        retry = generate_node_content(node, stricter_context, questions, llm=llm)
+        retry_report = node_quality_report(retry.content or "")
+        if int(retry_report.get("score") or 100) <= int(report.get("score") or 100):
+            retry = retry.model_copy(update={"content": retry.content})
+            return retry
+        return filled
 
     def _build_generation_logic(self, node: ChapterNode, questions: Any, context: Any) -> str:
         context_brief = ""

@@ -7,7 +7,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from storyforge.application.daemon.services.daemon_orchestrator import DaemonOrchestrator
+from storyforge.application.daemon.services.daemon_orchestrator import DaemonOrchestrator, _build_rollback_instruction
+from storyforge.application.planner.services.chapter_outliner import generate_chapter_outline
 from storyforge.application.daemon.services.sse_event_service import SSEEventManager
 from storyforge.infrastructure.ai.openai_adapter import call_llm
 from storyforge.infrastructure.persistence.daemon_state_repository import load_daemon_state, load_latest_daemon_state, save_daemon_state
@@ -52,12 +53,18 @@ class ReviewDecisionRequest(BaseModel):
     novel_id: str | None = None
     content: str | None = None
     instructions: str = ""
+    revision_id: str = ""
 
 
 class RewriteChapterRequest(BaseModel):
     novel_id: str
     chapter_index: int = Field(ge=1)
     reset_outline: bool = False
+
+
+class RegenerateOutlineRequest(BaseModel):
+    novel_id: str
+    chapter_index: int = Field(ge=1)
 
 
 @router.get("/api/v1/daemon/events")
@@ -131,7 +138,7 @@ def approve_review(request: ReviewDecisionRequest) -> dict[str, Any]:
         node = _resolve_saved_pending_review(request, "approved")
         return {"status": "approved", "node": node, "source": "saved_state"}
     try:
-        node = current.approve_pending_node(request.content, request.instructions)
+        node = current.approve_pending_node(request.content, request.instructions, request.revision_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"status": "approved", "node": node}
@@ -144,7 +151,7 @@ def rewrite_review(request: ReviewDecisionRequest) -> dict[str, Any]:
         node = _resolve_saved_pending_review(request, "rewritten")
         return {"status": "rewritten", "node": node, "source": "saved_state"}
     try:
-        node = current.rewrite_pending_node(request.content, request.instructions)
+        node = current.rewrite_pending_node(request.content, request.instructions, request.revision_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"status": "rewritten", "node": node}
@@ -157,10 +164,17 @@ def rollback_review(request: ReviewDecisionRequest) -> dict[str, Any]:
         node = _resolve_saved_pending_review(request, "rolled_back")
         return {"status": "rolled_back", "node": node, "source": "saved_state"}
     try:
-        node = current.rollback_pending_node(request.instructions)
+        node = current.rollback_pending_node(request.instructions, request.revision_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"status": "rolled_back", "node": node}
+
+
+@router.post("/api/v1/daemon/regenerate-outline")
+def regenerate_outline(request: RegenerateOutlineRequest) -> dict[str, Any]:
+    state = _regenerate_chapter_outline_only(request.novel_id, request.chapter_index)
+    sse_manager.broadcast({"type": "outline_ready", "data": state.get("current_chapter_outline") or {}, "state": state})
+    return {"status": "outline_regenerated", "chapter_index": request.chapter_index, "state": state}
 
 
 @router.post("/api/v1/daemon/rewrite-chapter")
@@ -206,6 +220,49 @@ def daemon_status(novel_id: str | None = None) -> dict[str, Any]:
         save_daemon_state(latest_state)
         return latest_state
     return _idle_state()
+
+
+def _regenerate_chapter_outline_only(novel_id: str, chapter_index: int) -> dict[str, Any]:
+    current = _get_running_orchestrator(novel_id)
+    state = current.state if current is not None else (load_daemon_state(novel_id) or _idle_state(novel_id))
+    config = dict(state.get("llm_config") or {})
+
+    def llm(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:
+        return call_llm(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            json_mode=json_mode,
+            api_key=config.get("api_key") or None,
+            base_url=config.get("api_base_url") or None,
+            model=config.get("planning_model") or config.get("model") or None,
+        )
+
+    act_plans = state.get("act_plans") if isinstance(state.get("act_plans"), list) else []
+    chapter_plan: dict[str, Any] = {"chapter_index": chapter_index, "core_event": "按当前案头设定重做本章章纲", "target_word_count": 3000, "emotion_tone": "期待"}
+    act_plan: dict[str, Any] = {"chapters": [chapter_plan]}
+    for act in act_plans:
+        if not isinstance(act, dict):
+            continue
+        for chapter in act.get("chapters", []) or []:
+            if int(chapter.get("chapter_index") or 0) == chapter_index:
+                chapter_plan = dict(chapter)
+                act_plan = dict(act)
+                break
+    assets = state.get("novel_assets") or {}
+    override = str(assets.get(f"chapter_outline:{chapter_index}") or "").strip()
+    chapter_function = str(chapter_plan.get("core_event") or chapter_plan.get("title") or "推进本章主线")
+    outline_function = f"{chapter_function}\n\n作者指定章纲覆盖：{override}" if override else chapter_function
+    outline = generate_chapter_outline(act_plan, chapter_index, outline_function, llm=llm)
+    if override:
+        outline["author_override"] = override
+        outline.setdefault("memo", {})["current_task"] = override
+    state["current_chapter_outline"] = {"chapter_index": chapter_index, "chapter_function": chapter_function, "outline": outline, "nodes": outline.get("nodes") or [], "refreshed": True}
+    state["novel_assets"] = {**assets, "assets_dirty": "false", f"chapter_outline_dirty:{chapter_index}": "false"}
+    card = dict(state.get("writing_card") or {})
+    card.update({"chapter_index": chapter_index, "status": "outline_refreshed", "next_step": "章纲已刷新，可选择重写当前小节或重写本章"})
+    state["writing_card"] = card
+    save_daemon_state(state)
+    return state
 
 
 def _reset_chapter_for_rewrite(novel_id: str, chapter_index: int, reset_outline: bool = False) -> dict[str, Any]:
@@ -282,14 +339,21 @@ def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str)
     pending = manual.get("pending")
     if not pending:
         raise HTTPException(status_code=409, detail="no pending review node")
+    if request.revision_id and str(pending.get("revision_id") or "") != request.revision_id:
+        raise HTTPException(status_code=409, detail="stale review revision")
     resolved = dict(pending)
     if request.content is not None and decision != "rolled_back":
         resolved["content"] = request.content
     resolved["decision"] = decision
     resolved["instructions"] = request.instructions
     manual.setdefault("history", []).append(resolved)
+    novel_id = str(state.get("novel_id") or request.novel_id or "")
+    chapter_index = int(resolved.get("chapter_index") or 1)
+    node_index = int(resolved.get("node_index") or 1)
+    node_type = str(resolved.get("node_type") or "节点")
+    content = str(resolved.get("content") or "")
     if decision == "rolled_back":
-        rewrite_instruction = request.instructions or "上一版不满意。下一版必须换写法，不要沿用上一版的开头、节奏、意象、句式和叙述重心；冲突更直给，动作和对话更具体。"
+        rewrite_instruction = _build_rollback_instruction(request.instructions)
         rejected = str(pending.get("content") or "")
         manual["pending"] = pending
         manual["last_rejected"] = {"chapter_index": chapter_index, "node_index": node_index, "content": rejected[:1200], "reason": rewrite_instruction}
@@ -300,11 +364,6 @@ def _resolve_saved_pending_review(request: ReviewDecisionRequest, decision: str)
         manual["decision"] = {"type": decision, "content": request.content, "instructions": request.instructions}
         manual["instructions"] = request.instructions
     state["manual_review"] = manual
-    novel_id = str(state.get("novel_id") or request.novel_id or "")
-    chapter_index = int(resolved.get("chapter_index") or 1)
-    node_index = int(resolved.get("node_index") or 1)
-    node_type = str(resolved.get("node_type") or "节点")
-    content = str(resolved.get("content") or "")
     if decision != "rolled_back" and novel_id and content:
         save_node_draft(novel_id, chapter_index, node_index, node_type, content, locked=True, source="manual_review", sync_chapter=False, status="approved", appended_to_chapter=True)
         chapter_texts = list(state.get("chapter_texts") or [])

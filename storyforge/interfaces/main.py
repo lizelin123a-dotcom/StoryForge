@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="StoryForge", version="2.0.9", lifespan=lifespan)
+app = FastAPI(title="StoryForge", version="2.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
